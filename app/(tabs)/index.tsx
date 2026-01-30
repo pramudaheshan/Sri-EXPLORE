@@ -7,8 +7,14 @@ import {
   TouchableOpacity,
   Dimensions,
   Image,
+  ImageBackground,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { Asset } from 'expo-asset';
+import { useRouter } from 'expo-router';
+import { auth } from '../../firebaseConfig';
 import {
   Bell,
   MapPin,
@@ -20,18 +26,51 @@ import {
   Navigation,
   Clock,
   Thermometer,
+  ChevronRight,
+  Compass,
+  Sparkles,
+  User,
 } from 'lucide-react-native';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+
+// Background image
+const backgroundImage = require('../../assets/images/home.jpg');
+
+// Theme colors - Matching onboarding page style
+const COLORS = {
+  primary: '#0D3B2E',
+  secondary: '#1A7B5F',
+  teal: '#20B2AA', // TripTuner accent
+  green: '#32CD32', // AR accent
+  coral: '#FF6B6B', // SafeSpot accent
+  gold: '#FFD700', // Rewards/Trophy
+  white: '#FFFFFF',
+  offWhite: '#F0F4F3',
+  gray: '#B8C4C2',
+  darkGray: '#6B7D79',
+  glass: 'rgba(255, 255, 255, 0.08)',
+  glassBorder: 'rgba(255, 255, 255, 0.15)',
+  glassLight: 'rgba(255, 255, 255, 0.05)',
+};
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [weather] = useState({ temp: '28°C', condition: 'Sunny' });
+  const user = auth.currentUser;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  };
 
   const nearbyLandmarks = [
     {
@@ -61,506 +100,822 @@ export default function HomeScreen() {
   ];
 
   const quickActions = [
-    { icon: Calendar, title: "Today's Plan", color: '#20B2AA', badge: 2 },
-    { icon: Camera, title: 'AR Scan', color: '#32CD32', badge: null },
-    { icon: Shield, title: 'Safety', color: '#F4A460', badge: 1 },
-    { icon: Trophy, title: 'Achievements', color: '#FF6B6B', badge: 2 },
+    {
+      icon: Calendar,
+      title: "Today's Plan",
+      subtitle: 'View Schedule',
+      color: COLORS.teal,
+      badge: 2,
+    },
+    {
+      icon: Camera,
+      title: 'AR Explore',
+      subtitle: 'Scan & Discover',
+      color: COLORS.green,
+      badge: null,
+    },
+    {
+      icon: Shield,
+      title: 'SafeSpot',
+      subtitle: 'Stay Protected',
+      color: COLORS.coral,
+      badge: 1,
+    },
+    {
+      icon: Trophy,
+      title: 'Rewards',
+      subtitle: '3 New Badges',
+      color: COLORS.gold,
+      badge: 3,
+    },
+  ];
+
+  const recentActivity = [
+    {
+      icon: Camera,
+      title: 'Scanned Buddha Statue',
+      time: '2 hours ago',
+      color: COLORS.green,
+    },
+    {
+      icon: Trophy,
+      title: 'Earned "Cultural Explorer"',
+      time: '5 hours ago',
+      color: COLORS.gold,
+    },
+    {
+      icon: Shield,
+      title: 'Safety alert viewed',
+      time: 'Yesterday',
+      color: COLORS.coral,
+    },
   ];
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <LinearGradient colors={['#20B2AA', '#48D1CC']} style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.greeting}>
-              Good {new Date().getHours() < 12 ? 'Morning' : 'Afternoon'}!
-            </Text>
-            <Text style={styles.username}>Alex Smith</Text>
-          </View>
-          <TouchableOpacity style={styles.notificationButton}>
-            <Bell size={24} color="#FFFFFF" />
-            <View style={styles.notificationBadge}>
-              <Text style={styles.badgeText}>3</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+    <View style={styles.container}>
+      <ImageBackground
+        source={backgroundImage}
+        style={styles.backgroundImage}
+        resizeMode="cover"
+      >
+        {/* Dark overlay for readability */}
+        <LinearGradient
+          colors={[
+            'rgba(0, 0, 0, 0.8)',
+            'rgba(0, 0, 0, 0.17)',
+            'rgba(0, 0, 0, 0.56)',
+          ]}
+          style={StyleSheet.absoluteFill}
+        />
 
-        <View style={styles.weatherContainer}>
-          <View style={styles.weatherItem}>
-            <Clock size={16} color="#FFFFFF" />
-            <Text style={styles.weatherText}>
-              {currentTime.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </Text>
-          </View>
-          <View style={styles.weatherItem}>
-            <Thermometer size={16} color="#FFFFFF" />
-            <Text style={styles.weatherText}>{weather.temp}</Text>
-          </View>
-          <View style={styles.weatherItem}>
-            <MapPin size={16} color="#FFFFFF" />
-            <Text style={styles.weatherText}>Kandy, Sri Lanka</Text>
-          </View>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.content}>
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActionsGrid}>
-            {quickActions.map((action, index) => (
-              <TouchableOpacity key={index} style={styles.quickActionCard}>
-                <View
-                  style={[
-                    styles.quickActionIcon,
-                    { backgroundColor: action.color },
-                  ]}
-                >
-                  <action.icon size={24} color="#FFFFFF" />
-                  {action.badge && (
-                    <View style={styles.actionBadge}>
-                      <Text style={styles.actionBadgeText}>{action.badge}</Text>
-                    </View>
-                  )}
+        <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+          {/* Header - Glassmorphism */}
+          <View style={styles.header}>
+            {/* Top Row */}
+            <View style={styles.headerTop}>
+              <View style={styles.userInfo}>
+                <Text style={styles.greeting}>{getGreeting()}</Text>
+                <View style={styles.usernameRow}>
+                  <Text style={styles.username}>
+                    {user?.displayName || 'Explorer'}
+                  </Text>
+                  <Sparkles
+                    size={16}
+                    color={COLORS.teal}
+                    style={{ marginLeft: 6 }}
+                  />
                 </View>
-                <Text style={styles.quickActionTitle}>{action.title}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+              </View>
+              <View style={styles.headerActions}>
+                <TouchableOpacity style={styles.notificationButton}>
+                  <BlurView
+                    intensity={30}
+                    tint="light"
+                    style={styles.notificationBlur}
+                  >
+                    <Bell size={20} color={COLORS.teal} />
+                    <View style={styles.notificationBadge}>
+                      <Text style={styles.badgeText}>3</Text>
+                    </View>
+                  </BlurView>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.profileButton}
+                  onPress={() => router.push('/profile')}
+                >
+                  <BlurView
+                    intensity={30}
+                    tint="light"
+                    style={styles.profileBlur}
+                  >
+                    <User size={20} color={COLORS.teal} />
+                  </BlurView>
+                </TouchableOpacity>
+              </View>
+            </View>
 
-        {/* Today's Highlights */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Highlights</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
+            {/* Location & Weather Card - Glass */}
+            <View style={styles.infoCard}>
+              <BlurView intensity={40} tint="light" style={styles.infoCardBlur}>
+                <View style={styles.infoItem}>
+                  <View
+                    style={[
+                      styles.infoIconContainer,
+                      { backgroundColor: `${COLORS.teal}15` },
+                    ]}
+                  >
+                    <MapPin size={14} color={COLORS.teal} />
+                  </View>
+                  <Text style={styles.infoText}>Kandy, Sri Lanka</Text>
+                </View>
+                <View style={styles.infoDivider} />
+                <View style={styles.infoItem}>
+                  <View
+                    style={[
+                      styles.infoIconContainer,
+                      { backgroundColor: `${COLORS.coral}15` },
+                    ]}
+                  >
+                    <Thermometer size={14} color={COLORS.coral} />
+                  </View>
+                  <Text style={styles.infoText}>{weather.temp}</Text>
+                </View>
+                <View style={styles.infoDivider} />
+                <View style={styles.infoItem}>
+                  <View
+                    style={[
+                      styles.infoIconContainer,
+                      { backgroundColor: `${COLORS.green}15` },
+                    ]}
+                  >
+                    <Clock size={14} color={COLORS.green} />
+                  </View>
+                  <Text style={styles.infoText}>
+                    {currentTime.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                </View>
+              </BlurView>
+            </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <TouchableOpacity style={styles.highlightCard}>
-              <LinearGradient
-                colors={['#32CD32', '#90EE90']}
-                style={styles.highlightGradient}
-              >
-                <Trophy size={32} color="#FFFFFF" />
-                <Text style={styles.highlightTitle}>New Badge!</Text>
-                <Text style={styles.highlightSubtitle}>Temple Explorer</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.highlightCard}>
-              <LinearGradient
-                colors={['#FF6B6B', '#FFB3B3']}
-                style={styles.highlightGradient}
-              >
-                <Camera size={32} color="#FFFFFF" />
-                <Text style={styles.highlightTitle}>3 AR Scans</Text>
-                <Text style={styles.highlightSubtitle}>Today</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.highlightCard}>
-              <LinearGradient
-                colors={['#F4A460', '#DEB887']}
-                style={styles.highlightGradient}
-              >
-                <Navigation size={32} color="#FFFFFF" />
-                <Text style={styles.highlightTitle}>5.2 km</Text>
-                <Text style={styles.highlightSubtitle}>Explored</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-
-        {/* Nearby Landmarks */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Nearby Landmarks</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>View Map</Text>
-            </TouchableOpacity>
-          </View>
-
-          {nearbyLandmarks.map((landmark) => (
-            <TouchableOpacity key={landmark.id} style={styles.landmarkCard}>
-              <Image
-                source={{ uri: landmark.image }}
-                style={styles.landmarkImage}
-              />
-              <View style={styles.landmarkInfo}>
-                <Text style={styles.landmarkName}>{landmark.name}</Text>
-                <View style={styles.landmarkDetails}>
-                  <View style={styles.landmarkMeta}>
-                    <MapPin size={14} color="#666" />
-                    <Text style={styles.landmarkDistance}>
-                      {landmark.distance}
+            {/* Featured Banner - Glass */}
+            <TouchableOpacity style={styles.featuredBanner}>
+              <BlurView intensity={35} tint="light" style={styles.featuredBlur}>
+                <View style={styles.featuredContent}>
+                  <View
+                    style={[
+                      styles.featuredIconContainer,
+                      { backgroundColor: `${COLORS.teal}20` },
+                    ]}
+                  >
+                    <Compass size={24} color={COLORS.teal} />
+                  </View>
+                  <View style={styles.featuredText}>
+                    <Text style={styles.featuredTitle}>Discover Sri Lanka</Text>
+                    <Text style={styles.featuredSubtitle}>
+                      Explore 50+ hidden gems nearby
                     </Text>
                   </View>
-                  <View style={styles.landmarkMeta}>
-                    <Star size={14} color="#FFD700" fill="#FFD700" />
-                    <Text style={styles.landmarkRating}>{landmark.rating}</Text>
-                  </View>
                 </View>
-              </View>
+                <ChevronRight size={20} color={COLORS.gray} />
+              </BlurView>
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
 
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <View style={styles.activityList}>
-            <View style={styles.activityItem}>
-              <View
-                style={[styles.activityIcon, { backgroundColor: '#32CD32' }]}
-              >
-                <Camera size={16} color="#FFFFFF" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Scanned Buddha Statue</Text>
-                <Text style={styles.activityTime}>2 hours ago</Text>
+          <View style={styles.content}>
+            {/* Quick Actions Grid - Glass Cards */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Quick Actions</Text>
+              <View style={styles.quickActionsGrid}>
+                {quickActions.map((action, index) => (
+                  <TouchableOpacity key={index} style={styles.quickActionCard}>
+                    <BlurView
+                      intensity={25}
+                      tint="light"
+                      style={styles.quickActionBlur}
+                    >
+                      <View
+                        style={[
+                          styles.quickActionIcon,
+                          { backgroundColor: `${action.color}20` },
+                        ]}
+                      >
+                        <action.icon size={24} color={action.color} />
+                        {action.badge && (
+                          <View style={styles.actionBadge}>
+                            <Text style={styles.actionBadgeText}>
+                              {action.badge}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.quickActionTitle}>
+                        {action.title}
+                      </Text>
+                      <Text style={styles.quickActionSubtitle}>
+                        {action.subtitle}
+                      </Text>
+                    </BlurView>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
 
-            <View style={styles.activityItem}>
-              <View
-                style={[styles.activityIcon, { backgroundColor: '#20B2AA' }]}
-              >
-                <Trophy size={16} color="#FFFFFF" />
+            {/* Today's Highlights - Glass Cards */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Today's Highlights</Text>
+                <TouchableOpacity style={styles.seeAllButton}>
+                  <Text style={styles.seeAllText}>See All</Text>
+                  <ChevronRight size={14} color={COLORS.gray} />
+                </TouchableOpacity>
               </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>
-                  Earned "Cultural Explorer" badge
-                </Text>
-                <Text style={styles.activityTime}>5 hours ago</Text>
-              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <TouchableOpacity style={styles.highlightCard}>
+                  <BlurView
+                    intensity={30}
+                    tint="light"
+                    style={styles.highlightBlur}
+                  >
+                    <View
+                      style={[
+                        styles.highlightIconBg,
+                        { backgroundColor: `${COLORS.gold}20` },
+                      ]}
+                    >
+                      <Trophy size={24} color={COLORS.gold} />
+                    </View>
+                    <Text style={styles.highlightTitle}>New Badge!</Text>
+                    <Text style={styles.highlightSubtitle}>
+                      Temple Explorer
+                    </Text>
+                  </BlurView>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.highlightCard}>
+                  <BlurView
+                    intensity={30}
+                    tint="light"
+                    style={styles.highlightBlur}
+                  >
+                    <View
+                      style={[
+                        styles.highlightIconBg,
+                        { backgroundColor: `${COLORS.green}20` },
+                      ]}
+                    >
+                      <Camera size={24} color={COLORS.green} />
+                    </View>
+                    <Text style={styles.highlightTitle}>3 AR Scans</Text>
+                    <Text style={styles.highlightSubtitle}>Today</Text>
+                  </BlurView>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.highlightCard}>
+                  <BlurView
+                    intensity={30}
+                    tint="light"
+                    style={styles.highlightBlur}
+                  >
+                    <View
+                      style={[
+                        styles.highlightIconBg,
+                        { backgroundColor: `${COLORS.teal}20` },
+                      ]}
+                    >
+                      <Navigation size={24} color={COLORS.teal} />
+                    </View>
+                    <Text style={styles.highlightTitle}>5.2 km</Text>
+                    <Text style={styles.highlightSubtitle}>Explored</Text>
+                  </BlurView>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.highlightCard}>
+                  <BlurView
+                    intensity={30}
+                    tint="light"
+                    style={styles.highlightBlur}
+                  >
+                    <View
+                      style={[
+                        styles.highlightIconBg,
+                        { backgroundColor: `${COLORS.teal}20` },
+                      ]}
+                    >
+                      <Star size={24} color={COLORS.teal} />
+                    </View>
+                    <Text style={styles.highlightTitle}>4.8 Rating</Text>
+                    <Text style={styles.highlightSubtitle}>Your Reviews</Text>
+                  </BlurView>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
 
-            <View style={styles.activityItem}>
-              <View
-                style={[styles.activityIcon, { backgroundColor: '#F4A460' }]}
-              >
-                <Shield size={16} color="#FFFFFF" />
+            {/* Nearby Landmarks - Glass Cards */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Nearby Landmarks</Text>
+                <TouchableOpacity style={styles.seeAllButton}>
+                  <Text style={styles.seeAllText}>View Map</Text>
+                  <ChevronRight size={14} color={COLORS.gray} />
+                </TouchableOpacity>
               </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Safety alert reported</Text>
-                <Text style={styles.activityTime}>Yesterday</Text>
+
+              {nearbyLandmarks.map((landmark) => (
+                <TouchableOpacity key={landmark.id} style={styles.landmarkCard}>
+                  <Image
+                    source={{ uri: landmark.image }}
+                    style={styles.landmarkImage}
+                  />
+                  <View style={styles.landmarkOverlay}>
+                    <BlurView
+                      intensity={50}
+                      tint="dark"
+                      style={styles.landmarkBlur}
+                    >
+                      <View style={styles.landmarkInfo}>
+                        <Text style={styles.landmarkName} numberOfLines={1}>
+                          {landmark.name}
+                        </Text>
+                        <View style={styles.landmarkDetails}>
+                          <View style={styles.landmarkMeta}>
+                            <MapPin size={12} color={COLORS.offWhite} />
+                            <Text style={styles.landmarkDistance}>
+                              {landmark.distance}
+                            </Text>
+                          </View>
+                          <View style={styles.landmarkMeta}>
+                            <Star
+                              size={12}
+                              color={COLORS.gold}
+                              fill={COLORS.gold}
+                            />
+                            <Text style={styles.landmarkRating}>
+                              {landmark.rating}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </BlurView>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Recent Activity - Glass List */}
+            <View style={[styles.section, { marginBottom: 100 }]}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <View style={styles.activityList}>
+                <BlurView
+                  intensity={25}
+                  tint="light"
+                  style={styles.activityBlur}
+                >
+                  {recentActivity.map((activity, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.activityItem,
+                        index === recentActivity.length - 1 && {
+                          borderBottomWidth: 0,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.activityIcon,
+                          { backgroundColor: `${activity.color}20` },
+                        ]}
+                      >
+                        <activity.icon size={16} color={activity.color} />
+                      </View>
+                      <View style={styles.activityContent}>
+                        <Text style={styles.activityTitle}>
+                          {activity.title}
+                        </Text>
+                        <Text style={styles.activityTime}>{activity.time}</Text>
+                      </View>
+                      <ChevronRight size={16} color={COLORS.darkGray} />
+                    </View>
+                  ))}
+                </BlurView>
               </View>
             </View>
           </View>
-        </View>
-      </View>
-    </ScrollView>
+        </ScrollView>
+      </ImageBackground>
+    </View>
   );
 }
-
 
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#113438', // Deep teal background
+    backgroundColor: '#1a1a1a',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+  },
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
   header: {
-    paddingTop: 52,
-    paddingHorizontal: 22,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
-    overflow: 'hidden',
-    backgroundColor: 'linear-gradient(180deg, #134545 60%, #113438 100%)',
+    paddingTop: 56,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 18,
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  userInfo: {
+    flex: 1,
   },
   greeting: {
-    fontSize: 18,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#ffffff', // Gold accent text
-    opacity: 0.95,
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+    color: COLORS.gray,
     letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   username: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: 'Poppins-Bold',
-    color: '#f9faf9', // Off-white for username
+    color: COLORS.offWhite,
+    letterSpacing: -0.5,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   notificationButton: {
-    position: 'relative',
-    width: 46,
-    height: 46,
-    backgroundColor: 'rgba(227,201,122,0.14)', // Subtle gold glassy
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  notificationBlur: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#ffffff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
+    backgroundColor: COLORS.glass,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   notificationBadge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 18,
-    height: 18,
-    backgroundColor: '#ffffff',
-    borderRadius: 9,
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    backgroundColor: 'rgba(180, 100, 100, 0.8)',
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#113438',
+    borderWidth: 1.5,
+    borderColor: COLORS.glassBorder,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'Poppins-Bold',
-    color: '#113438',
+    color: COLORS.offWhite,
   },
-  weatherContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    backgroundColor: 'rgba(44,122,117,0.12)', // Emerald glassy
-    borderRadius: 18,
-    paddingVertical: 8,
-    marginTop: 10,
+  profileButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
   },
-  weatherItem: {
+  profileBlur: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.glass,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+  },
+  infoCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 14,
+  },
+  infoCardBlur: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 7,
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: COLORS.glass,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
-  weatherText: {
-    fontSize: 15,
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  infoIconContainer: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: COLORS.glassLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  infoText: {
+    fontSize: 12,
     fontFamily: 'Poppins-Medium',
-    color: '#f9faf9',
-    marginLeft: 7,
-    opacity: 0.93,
+    color: COLORS.offWhite,
+    opacity: 0.9,
+  },
+  infoDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: COLORS.glassBorder,
+  },
+  featuredBanner: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  featuredBlur: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.glass,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+  },
+  featuredContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  featuredIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.glassLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  featuredText: {
+    flex: 1,
+  },
+  featuredTitle: {
+    fontSize: 15,
+    fontFamily: 'Poppins-SemiBold',
+    color: COLORS.offWhite,
+    marginBottom: 1,
+  },
+  featuredSubtitle: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Regular',
+    color: COLORS.gray,
   },
   content: {
-    padding: 22,
+    padding: 20,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 26,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontFamily: 'Poppins-Bold',
-    color: '#ffffff',
-    letterSpacing: 0.5,
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
+    color: COLORS.offWhite,
+    marginBottom: 14,
+    opacity: 0.95,
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   seeAllText: {
-    fontSize: 15,
+    fontSize: 13,
     fontFamily: 'Poppins-Medium',
-    color: '#2c7a75', // Emerald accent
-    textDecorationLine: 'underline',
+    color: COLORS.gray,
   },
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginTop: -8,
   },
   quickActionCard: {
-    width: (width - 72) / 2,
-    backgroundColor: 'rgba(227,201,122,0.10)', // Gold glassy card
-    borderRadius: 22,
-    padding: 24,
+    width: (width - 52) / 2,
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  quickActionBlur: {
+    padding: 16,
     alignItems: 'center',
-    marginBottom: 18,
-    shadowColor: '#ffffff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.11,
-    shadowRadius: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(44,122,117,0.18)', // Emerald border
+    backgroundColor: COLORS.glass,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   quickActionIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: 'rgba(44,122,117,0.16)', // Emerald glassy
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    shadowColor: '#2c7a75',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.09,
-    shadowRadius: 9,
+    marginBottom: 10,
     position: 'relative',
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   actionBadge: {
     position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 21,
-    height: 21,
-    backgroundColor: '#0fd7ef', // Cyan accent
-    borderRadius: 11,
+    top: -3,
+    right: -3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#f9faf9',
+    backgroundColor: 'rgba(180, 100, 100, 0.7)',
+    borderWidth: 1.5,
+    borderColor: COLORS.glassBorder,
   },
   actionBadgeText: {
-    fontSize: 11,
+    fontSize: 9,
     fontFamily: 'Poppins-Bold',
-    color: '#113438',
+    color: COLORS.offWhite,
   },
   quickActionTitle: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Medium',
-    color: '#f9faf9',
+    fontSize: 13,
+    fontFamily: 'Poppins-SemiBold',
+    color: COLORS.offWhite,
     textAlign: 'center',
-    marginTop: 4,
-    letterSpacing: 0.2,
+  },
+  quickActionSubtitle: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Regular',
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginTop: 2,
   },
   highlightCard: {
-    width: 160,
-    height: 120,
-    borderRadius: 20,
-    marginRight: 18,
+    width: 130,
+    height: 150,
+    borderRadius: 18,
+    marginRight: 12,
     overflow: 'hidden',
-    backgroundColor: 'rgba(44,122,117,0.10)',
-    shadowColor: '#2c7a75',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    borderWidth: 1.2,
-    borderColor: '#ffffff',
   },
-  highlightGradient: {
+  highlightBlur: {
     flex: 1,
-    padding: 18,
+    padding: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: COLORS.glass,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+  },
+  highlightIconBg: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: COLORS.glassLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   highlightTitle: {
-    fontSize: 17,
-    fontFamily: 'Poppins-Bold',
-    color: '#ffffff',
-    marginTop: 8,
-    letterSpacing: 0.2,
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    color: COLORS.offWhite,
+    textAlign: 'center',
   },
   highlightSubtitle: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: 'Poppins-Regular',
-    color: '#f9faf9',
-    opacity: 0.89,
+    color: COLORS.gray,
+    textAlign: 'center',
     marginTop: 2,
   },
   landmarkCard: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(44,122,117,0.07)',
+    height: 130,
     borderRadius: 18,
-    padding: 17,
-    marginBottom: 16,
-    shadowColor: '#2c7a75',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.09,
-    shadowRadius: 8,
-    borderWidth: 1.2,
-    borderColor: 'rgba(227,201,122,0.17)',
+    marginBottom: 12,
+    overflow: 'hidden',
   },
   landmarkImage: {
-    width: 84,
-    height: 84,
-    borderRadius: 14,
-    marginRight: 18,
-    borderWidth: 2,
-    borderColor: '#ffffff',
+    width: '100%',
+    height: '100%',
+  },
+  landmarkOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+  },
+  landmarkBlur: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(13, 59, 46, 0.6)',
   },
   landmarkInfo: {
     flex: 1,
-    justifyContent: 'center',
   },
   landmarkName: {
-    fontSize: 17,
-    fontFamily: 'Poppins-Bold',
-    color: '#ffffff',
-    marginBottom: 8,
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    color: COLORS.offWhite,
+    marginBottom: 4,
   },
   landmarkDetails: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   landmarkMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 14,
   },
   landmarkDistance: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
-    color: '#f9faf9',
-    marginLeft: 5,
-    opacity: 0.85,
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+    color: COLORS.gray,
+    marginLeft: 4,
   },
   landmarkRating: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
-    color: '#ffffff',
-    marginLeft: 5,
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+    color: COLORS.gray,
+    marginLeft: 4,
   },
   activityList: {
-    backgroundColor: 'rgba(44,122,117,0.11)',
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: '#2c7a75',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.09,
-    shadowRadius: 7,
-    borderWidth: 1.2,
-    borderColor: '#ffffff',
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  activityBlur: {
+    backgroundColor: COLORS.glass,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+    padding: 4,
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 13,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(227,201,122,0.15)',
+    borderBottomColor: COLORS.glassBorder,
   },
   activityIcon: {
-    width: 35,
-    height: 35,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 13,
-    backgroundColor: 'rgba(227,201,122,0.17)',
-    borderWidth: 1.4,
-    borderColor: '#2c7a75',
-    shadowColor: '#113438',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+    marginRight: 12,
+    backgroundColor: COLORS.glassLight,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   activityContent: {
     flex: 1,
   },
   activityTitle: {
-    fontSize: 15,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#ffffff',
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+    color: COLORS.offWhite,
   },
   activityTime: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: 'Poppins-Regular',
-    color: '#f9faf9',
-    marginTop: 2,
-    opacity: 0.85,
+    color: COLORS.gray,
+    marginTop: 1,
   },
 });
