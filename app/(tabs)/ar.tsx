@@ -6,20 +6,23 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
-  Modal,
   Dimensions,
-  Animated,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import { SriARInterface } from '../../components/ar/sri-ar';
+import { SriARInterface } from '../../components/ar';
+import { ARDashboard } from '../../components/ar';
 import { useAuth, useARScans } from '../../hooks/useFirebase';
 import { useIsFocused } from '@react-navigation/native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ============================================
+// VIEW MODES
+// ============================================
+type ViewMode = 'dashboard' | 'scanning' | 'relic-hunter';
 
 // ============================================
 // SRI-AR - Main AR Component (Simplified)
@@ -172,146 +175,126 @@ const RelicHunterComingSoon: React.FC<{ onClose: () => void }> = ({
 };
 
 // ============================================
-// MORE OPTIONS MENU
+// SCAN HISTORY - Placeholder
 // ============================================
-interface MoreMenuProps {
-  visible: boolean;
-  onClose: () => void;
-  onSelectRelicHunter: () => void;
-}
-
-const MoreMenu: React.FC<MoreMenuProps> = ({
-  visible,
-  onClose,
-  onSelectRelicHunter,
-}) => {
-  if (!visible) return null;
-
+const ScanHistoryView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
-    <Modal
-      transparent
-      visible={visible}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <View style={styles.menuContainer}>
-          <BlurView intensity={80} tint="dark" style={styles.menuBlur}>
-            <Text style={styles.menuTitle}>More Features</Text>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                onClose();
-                onSelectRelicHunter();
-              }}
-            >
-              <View style={styles.menuIconContainer}>
-                <Ionicons name="compass" size={24} color="#FFD700" />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemTitle}>Relic Hunter</Text>
-                <Text style={styles.menuItemSubtitle}>Coming Soon</Text>
-              </View>
-              <View style={styles.comingSoonBadge}>
-                <Text style={styles.comingSoonBadgeText}>SOON</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Placeholder for future features */}
-            <View style={[styles.menuItem, styles.menuItemDisabled]}>
-              <View style={styles.menuIconContainer}>
-                <Ionicons name="camera" size={24} color="#666" />
-              </View>
-              <View style={styles.menuItemContent}>
-                <Text style={[styles.menuItemTitle, styles.disabledText]}>
-                  AR Gallery
-                </Text>
-                <Text style={styles.menuItemSubtitle}>Coming Soon</Text>
-              </View>
-            </View>
-          </BlurView>
+    <View style={styles.relicHunterContainer}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Scan History</Text>
+          <View style={styles.headerSpacer} />
         </View>
-      </TouchableOpacity>
-    </Modal>
+
+        <View style={styles.comingSoonContainer}>
+          <View style={styles.iconGlow}>
+            <Ionicons name="book" size={80} color="#00D4AA" />
+          </View>
+          <Text style={styles.relicHunterTitle}>Scan History</Text>
+          <Text style={styles.description}>
+            View all your previous scans, XP earned, and hotspots discovered.
+            This feature is under development.
+          </Text>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 };
 
 // ============================================
-// EDGE TAB BUTTON COMPONENT
+// SETTINGS - Placeholder
 // ============================================
-const EdgeTabButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
-  const pulseAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    // Subtle pulse animation to draw attention
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 0,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [pulseAnim]);
-
-  const glowOpacity = pulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.3, 0.6],
-  });
-
+const SettingsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
-    <TouchableOpacity
-      style={styles.edgeTab}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Animated.View style={[styles.edgeTabGlow, { opacity: glowOpacity }]} />
-      <View style={styles.edgeTabContent}>
-        <Ionicons name="chevron-back" size={18} color="#fff" />
-      </View>
-    </TouchableOpacity>
+    <View style={styles.relicHunterContainer}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Settings</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <View style={styles.comingSoonContainer}>
+          <View style={styles.iconGlow}>
+            <Ionicons name="settings" size={80} color="#4DA6FF" />
+          </View>
+          <Text style={styles.relicHunterTitle}>Settings</Text>
+          <Text style={styles.description}>
+            Manage your preferences, notifications, and account settings. Coming
+            soon!
+          </Text>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 };
+
+// MoreMenu removed — feature deprecated
+
+// EdgeTabButton removed — feature deprecated
 
 // ============================================
 // MAIN AR SCREEN
 // ============================================
 export default function ARScreen() {
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [showRelicHunter, setShowRelicHunter] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
 
-  if (showRelicHunter) {
-    return <RelicHunterComingSoon onClose={() => setShowRelicHunter(false)} />;
+  // Handle back navigation from scanning to dashboard
+  const handleBackToDashboard = () => {
+    setViewMode('dashboard');
+  };
+
+  // Render based on view mode
+  if (viewMode === 'relic-hunter') {
+    return <RelicHunterComingSoon onClose={handleBackToDashboard} />;
   }
 
+  if (viewMode === 'scanning') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+
+        {/* Back Button (Top-left) */}
+        <SafeAreaView style={styles.scanOverlay}>
+          <TouchableOpacity
+            style={styles.backToHomeButton}
+            onPress={handleBackToDashboard}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+        </SafeAreaView>
+
+        {/* Main AR View */}
+        <SriAR />
+
+        {/* More option removed */}
+      </View>
+    );
+  }
+
+  // Default: Dashboard view
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-
-      {/* Main AR View */}
-      <SriAR />
-
-      {/* Edge Tab Button (Right Edge - Hidden) */}
-      <EdgeTabButton onPress={() => setShowMoreMenu(true)} />
-
-      {/* More Options Menu */}
-      <MoreMenu
-        visible={showMoreMenu}
-        onClose={() => setShowMoreMenu(false)}
-        onSelectRelicHunter={() => setShowRelicHunter(true)}
+      <ARDashboard
+        onStartScan={() => setViewMode('scanning')}
+        onViewHistory={() => {
+          // TODO: Implement scan history view
+          Alert.alert('Scan History', 'This feature is under development');
+        }}
+        onViewSettings={() => {
+          // TODO: Implement settings view
+          Alert.alert('Settings', 'This feature is under development');
+        }}
+        onSelectRelicHunter={() => setViewMode('relic-hunter')}
+        onSelectARGallery={() => {
+          Alert.alert('AR Gallery', 'This feature is coming soon!');
+        }}
       />
     </View>
   );
@@ -360,109 +343,25 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
   },
 
-  // Edge Tab Button (Hidden at edge)
-  edgeTab: {
+  // Back to Home Button (in scanning mode)
+  scanOverlay: {
     position: 'absolute',
+    top: 0,
+    left: 0,
     right: 0,
-    top: '50%',
-    marginTop: -30,
-    width: 24,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
+    zIndex: 30,
   },
-  edgeTabGlow: {
+  backToHomeButton: {
     position: 'absolute',
-    right: 0,
-    width: 20,
-    height: 50,
-    backgroundColor: '#00D4AA',
-    borderTopLeftRadius: 8,
-    borderBottomLeftRadius: 8,
-  },
-  edgeTabContent: {
-    position: 'absolute',
-    right: 0,
-    width: 20,
-    height: 50,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderTopLeftRadius: 8,
-    borderBottomLeftRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRightWidth: 0,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-
-  // Modal & Menu
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuContainer: {
-    width: SCREEN_WIDTH - 48,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  menuBlur: {
-    padding: 20,
-  },
-  menuTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  menuItemDisabled: {
-    opacity: 0.5,
-  },
-  menuIconContainer: {
+    top: 50,
+    left: 20,
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  menuItemContent: {
-    flex: 1,
-  },
-  menuItemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  menuItemSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.5)',
-    marginTop: 2,
-  },
-  disabledText: {
-    color: '#666',
-  },
-  comingSoonBadge: {
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  comingSoonBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#000',
+    zIndex: 30,
   },
 
   // Relic Hunter Coming Soon

@@ -35,7 +35,7 @@ import {
 const { width, height } = Dimensions.get('window');
 
 // Background image
-const backgroundImage = require('../../assets/images/home.jpg');
+const backgroundImage = require('../../assets/images/home.png');
 
 // Theme colors - Matching onboarding page style
 const COLORS = {
@@ -63,6 +63,24 @@ export default function HomeScreen() {
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Preload background image to avoid first-load delay
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAssets() {
+      try {
+        await Asset.loadAsync([backgroundImage]);
+      } catch (e) {
+        console.warn('Asset preload failed', e);
+      }
+      if (isMounted) setAssetsLoaded(true);
+    }
+    loadAssets();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const getGreeting = () => {
@@ -105,28 +123,29 @@ export default function HomeScreen() {
       title: "Today's Plan",
       subtitle: 'View Schedule',
       color: COLORS.teal,
-      badge: 2,
+      route: 'itinerary',
     },
     {
       icon: Camera,
       title: 'AR Explore',
       subtitle: 'Scan & Discover',
-      color: COLORS.green,
+      color: COLORS.gold,
       badge: null,
+      route: 'ar',
     },
     {
       icon: Shield,
       title: 'SafeSpot',
       subtitle: 'Stay Protected',
       color: COLORS.coral,
-      badge: 1,
+      route: 'safety',
     },
     {
       icon: Trophy,
       title: 'Rewards',
       subtitle: '3 New Badges',
       color: COLORS.gold,
-      badge: 3,
+      route: 'profile',
     },
   ];
 
@@ -150,6 +169,24 @@ export default function HomeScreen() {
       color: COLORS.coral,
     },
   ];
+
+  if (!assetsLoaded) {
+    return (
+      <LinearGradient
+        colors={[COLORS.primary, COLORS.secondary]}
+        start={[0, 0]}
+        end={[1, 1]}
+        style={styles.loadingContainer}
+      >
+        <Text style={styles.loadingTitle}>Sri Explore</Text>
+        <ActivityIndicator
+          size="large"
+          color={COLORS.teal}
+          style={{ marginTop: 16 }}
+        />
+      </LinearGradient>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -208,7 +245,7 @@ export default function HomeScreen() {
                     tint="light"
                     style={styles.profileBlur}
                   >
-                    <User size={20} color={COLORS.teal} />
+                    <User size={20} color={COLORS.offWhite} />
                   </BlurView>
                 </TouchableOpacity>
               </View>
@@ -290,7 +327,16 @@ export default function HomeScreen() {
               <Text style={styles.sectionTitle}>Quick Actions</Text>
               <View style={styles.quickActionsGrid}>
                 {quickActions.map((action, index) => (
-                  <TouchableOpacity key={index} style={styles.quickActionCard}>
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.quickActionCard}
+                    onPress={() =>
+                      router.push(
+                        `/${action.route === 'index' ? '' : action.route}` as any,
+                      )
+                    }
+                    activeOpacity={0.8}
+                  >
                     <BlurView
                       intensity={25}
                       tint="light"
@@ -303,13 +349,6 @@ export default function HomeScreen() {
                         ]}
                       >
                         <action.icon size={24} color={action.color} />
-                        {action.badge && (
-                          <View style={styles.actionBadge}>
-                            <Text style={styles.actionBadgeText}>
-                              {action.badge}
-                            </Text>
-                          </View>
-                        )}
                       </View>
                       <Text style={styles.quickActionTitle}>
                         {action.title}
@@ -521,6 +560,12 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#1a1a1a',
+  },
+  loadingTitle: {
+    fontSize: 20,
+    fontFamily: 'Poppins-SemiBold',
+    color: COLORS.offWhite,
+    marginBottom: 12,
   },
   backgroundImage: {
     flex: 1,

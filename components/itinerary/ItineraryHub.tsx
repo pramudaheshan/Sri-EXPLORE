@@ -58,7 +58,10 @@ export default function ItineraryHub({
 }) {
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <LinearGradient colors={["#062f2b", "#0d1a1a"]} style={styles.backgroundGradient} />
+      <LinearGradient
+        colors={['#062f2b', '#0d1a1a']}
+        style={styles.backgroundGradient}
+      />
       <View style={styles.headerRow}>
         <Text style={styles.title}>{title}</Text>
         <TouchableOpacity onPress={onEdit} style={styles.iconButton}>
@@ -169,28 +172,98 @@ const sampleDays: Day[] = [
 ];
 
 const styles = StyleSheet.create({
-  container: { paddingTop: 56, paddingHorizontal: 20, paddingBottom: 18, backgroundColor: '#1a1a1a' },
+  container: {
+    paddingTop: 56,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    backgroundColor: '#1a1a1a',
+  },
   headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 20, fontFamily: 'Poppins-SemiBold', color: COLORS.offWhite, fontWeight: '700' },
+  title: {
+    fontSize: 20,
+    fontFamily: 'Poppins-SemiBold',
+    color: COLORS.offWhite,
+    fontWeight: '700',
+  },
   iconButton: { marginLeft: 'auto' },
-  iconBlur: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder },
+  iconBlur: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.glass,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+  },
   backgroundGradient: { ...StyleSheet.absoluteFillObject },
-  overviewCard: { padding: 18, borderRadius: 20, marginBottom: 18, backgroundColor: 'rgba(10,12,12,0.35)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
+  overviewCard: {
+    padding: 18,
+    borderRadius: 20,
+    marginBottom: 18,
+    backgroundColor: 'rgba(10,12,12,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
   overviewTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   overTitle: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
   overValue: { fontSize: 14, fontWeight: '700', color: COLORS.offWhite },
   flexSpacer: { flex: 1 },
-  actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
   action: { width: (width - 72) / 3 },
-  actionBlur: { paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
-  actionText: { marginTop: 6, fontSize: 12, color: COLORS.teal, fontWeight: '600' },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  actionBlur: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
+  actionText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: COLORS.teal,
+    fontWeight: '600',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.offWhite },
-  dayCard: { padding: 12, borderRadius: 12, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
+  dayCard: {
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.03)',
+  },
   dayLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  badge: { width: 64, height: 36, borderRadius: 8, backgroundColor: `${TEAL}30`, justifyContent: 'center', alignItems: 'center' },
+  badge: {
+    width: 64,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: `${TEAL}30`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   badgeText: { color: COLORS.offWhite, fontWeight: '700' },
   dayTitle: { fontSize: 14, fontWeight: '700', color: COLORS.offWhite },
-  daySummary: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4, maxWidth: width - 160 },
+  daySummary: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 4,
+    maxWidth: width - 160,
+  },
   dayAction: { marginLeft: 12 },
 });

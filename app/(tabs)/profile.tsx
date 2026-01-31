@@ -46,7 +46,7 @@ import {
 const { width } = Dimensions.get('window');
 
 // Background image
-const backgroundImage = require('../../assets/images/profile.jpg');
+const backgroundImage = require('../../assets/images/profile.png');
 
 // Theme colors - Matching onboarding page style
 const COLORS = {

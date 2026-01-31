@@ -27,17 +27,18 @@ const SIDEBAR_WIDTH = 280;
 
 // Background images to preload
 const backgroundImages = [
-  require('../../assets/images/home.jpg'),
-  require('../../assets/images/profile.jpg'),
+  require('../../assets/images/home.png'),
+  require('../../assets/images/profile.png'),
 ];
 
 const COLORS = {
   teal: '#20B2AA',
-  green: '#FFD700',
+  green: '#32CD32',
   coral: '#FF6B6B',
   gold: '#FFD700',
   glass: 'rgba(255, 255, 255, 0.08)',
   glassBorder: 'rgba(255, 255, 255, 0.12)',
+  white: '#FFFFFF',
 };
 
 const NAV_ITEMS = [
@@ -45,7 +46,7 @@ const NAV_ITEMS = [
     name: 'index',
     title: 'Home',
     icon: Home,
-    color: COLORS.teal,
+    color: COLORS.white,
     description: 'Dashboard & Overview',
   },
   {
@@ -59,7 +60,7 @@ const NAV_ITEMS = [
     name: 'ar',
     title: 'Sri-AR',
     icon: Camera,
-    color: COLORS.green,
+    color: COLORS.gold,
     description: 'Augmented Reality',
   },
   {
@@ -104,13 +105,15 @@ function SidebarNavigation() {
   };
 
   const currentRoute = pathname.replace('/', '') || 'index';
+  const activeItem = NAV_ITEMS.find((item) => item.name === currentRoute);
+  const activeColor = activeItem?.color ?? COLORS.gold;
 
   return (
     <>
       {/* Menu Toggle Button */}
       <TouchableOpacity style={styles.menuButton} onPress={toggleSidebar}>
         <BlurView intensity={40} tint="dark" style={styles.menuButtonBlur}>
-          <Menu size={22} color={COLORS.teal} />
+          <Menu size={22} color={activeColor} />
         </BlurView>
       </TouchableOpacity>
 
