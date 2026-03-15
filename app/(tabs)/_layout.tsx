@@ -57,11 +57,11 @@ const NAV_ITEMS = [
     description: 'Plan your journey',
   },
   {
-    name: 'ar',
-    title: 'Sri-AR',
+    name: 'reveal',
+    title: 'Sri-Reveal',
     icon: Camera,
     color: COLORS.gold,
-    description: 'Augmented Reality',
+    description: 'Gamified Exploration',
   },
   {
     name: 'safety',
@@ -255,7 +255,7 @@ export default function TabLayout() {
       >
         <Tabs.Screen name="index" />
         <Tabs.Screen name="itinerary" />
-        <Tabs.Screen name="ar" />
+        <Tabs.Screen name="reveal" />
         <Tabs.Screen name="safety" />
         <Tabs.Screen name="profile" options={{ href: null }} />
       </Tabs>

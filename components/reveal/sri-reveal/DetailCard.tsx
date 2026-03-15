@@ -34,6 +34,7 @@ interface DetailCardProps {
   hotspot: HotspotData | null;
   onClose: () => void;
   onComplete: (xp: number) => void;
+  isCollected?: boolean;
 }
 
 export const DetailCard: React.FC<DetailCardProps> = ({
@@ -41,6 +42,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({
   hotspot,
   onClose,
   onComplete,
+  isCollected = false,
 }) => {
   const translateY = useSharedValue(400); // Start off-screen
   const backdropOpacity = useSharedValue(0);
@@ -144,11 +146,22 @@ export const DetailCard: React.FC<DetailCardProps> = ({
           </View>
 
           <TouchableOpacity
-            style={styles.completeButton}
+            style={[
+              styles.completeButton,
+              isCollected ? styles.completeButtonDisabled : null,
+            ]}
             onPress={handleComplete}
+            disabled={!!isCollected}
+            accessibilityState={{ disabled: !!isCollected }}
           >
-            <Ionicons name="sparkles" size={20} color="#000" />
-            <Text style={styles.buttonText}>Got it! +{hotspot.xp} XP</Text>
+            <Ionicons
+              name={isCollected ? 'checkmark-circle' : 'sparkles'}
+              size={20}
+              color={isCollected ? '#FFD700' : '#000'}
+            />
+            <Text style={styles.buttonText}>
+              {isCollected ? 'Already collected' : `Got it! +${hotspot.xp} XP`}
+            </Text>
           </TouchableOpacity>
         </BlurView>
       </Animated.View>
@@ -251,6 +264,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  completeButtonDisabled: {
+    backgroundColor: 'rgba(255, 215, 0, 0.35)',
+    opacity: 0.82,
+    shadowOpacity: 0,
   },
   buttonText: {
     fontWeight: 'bold',

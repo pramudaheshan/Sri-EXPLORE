@@ -127,11 +127,11 @@ export default function HomeScreen() {
     },
     {
       icon: Camera,
-      title: 'AR Explore',
+      title: 'Explore',
       subtitle: 'Scan & Discover',
       color: COLORS.gold,
       badge: null,
-      route: 'ar',
+      route: 'reveal',
     },
     {
       icon: Shield,

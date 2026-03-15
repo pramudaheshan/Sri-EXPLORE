@@ -12,22 +12,59 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import { SriARInterface } from '../../components/ar';
-import { ARDashboard } from '../../components/ar';
+import { ScanInterface } from '../../components/reveal';
+import { RevealDashboard } from '../../components/reveal';
+import { ScanHistory } from '../../components/reveal';
+import { RelicDetailView } from '../../components/reveal';
+import { ScanCompletionCard } from '../../components/reveal/sri-reveal/ScanCompletionCard';
+import { SriLankanMapScreen } from '../../components/reveal';
 import { useAuth, useARScans } from '../../hooks/useFirebase';
 import { useIsFocused } from '@react-navigation/native';
+import { ARScan } from '../../services/firebaseService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
-// VIEW MODES
+// VIEW MODES & TYPES
 // ============================================
-type ViewMode = 'dashboard' | 'scanning' | 'relic-hunter';
+type ViewMode =
+  | 'dashboard'
+  | 'scanning'
+  | 'relic-hunter'
+  | 'scan-history'
+  | 'relic-detail'
+  | 'map-progress';
+
+interface RelicData {
+  relicId: string;
+  relicName: string;
+  description?: string;
+  model3dUrl?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    name: string;
+  };
+  hotspots?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    position: { x: number; y: number; z: number };
+  }>;
+  xpReward?: number;
+  difficulty?: string;
+  tags?: string[];
+}
 
 // ============================================
 // SRI-AR - Main AR Component (Simplified)
 // ============================================
-const SriAR: React.FC = () => {
+interface SriARProps {
+  onViewingChange?: (isViewing: boolean) => void;
+  relicData?: RelicData | null;
+}
+
+const SriAR: React.FC<SriARProps> = ({ onViewingChange, relicData }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [currentLocation, setCurrentLocation] = useState<{
     latitude: number;
@@ -38,6 +75,13 @@ const SriAR: React.FC = () => {
   // Firebase hooks
   const { user } = useAuth();
   const { recordScan } = useARScans(user?.uid);
+
+  console.log(
+    '🔧 reveal.tsx initialized - user:',
+    user?.uid,
+    'recordScan available:',
+    typeof recordScan,
+  );
 
   // Get current location
   useEffect(() => {
@@ -60,25 +104,68 @@ const SriAR: React.FC = () => {
     hotspotsExplored: number;
     totalHotspots: number;
   }) => {
-    // Record to Firebase if user is logged in
-    if (user && currentLocation) {
-      try {
-        await recordScan(
-          data.relicId,
-          data.relicName,
-          currentLocation,
-          data.xpEarned,
-          data.hotspotsExplored,
-          data.totalHotspots,
-        );
-        Alert.alert(
-          '🎉 Scan Complete!',
-          `You explored all ${data.totalHotspots} hotspots and earned ${data.xpEarned} XP!`,
-          [{ text: 'Awesome!' }],
-        );
-      } catch (error) {
-        console.error('Error recording scan:', error);
-      }
+    console.log('🔍 handleScanComplete called with:', {
+      relicId: data.relicId,
+      relicName: data.relicName,
+      user: user?.uid,
+      hasLocation: !!currentLocation,
+      recordScanType: typeof recordScan,
+      recordScanDefined: !!recordScan,
+    });
+
+    // Verify recordScan is available
+    if (!recordScan || typeof recordScan !== 'function') {
+      console.error('❌ recordScan is not a function!', {
+        recordScan,
+        type: typeof recordScan,
+      });
+      Alert.alert(
+        'Error',
+        'Unable to record scan - recordScan function not available',
+      );
+      return;
+    }
+
+    // Verify user is logged in
+    if (!user) {
+      console.error('❌ User is not logged in!');
+      Alert.alert('Error', 'You must be logged in to record a scan');
+      return;
+    }
+
+    // Verify location is available
+    if (!currentLocation) {
+      console.error('❌ Current location is not available!');
+      Alert.alert('Error', 'Location permission is required to record a scan');
+      return;
+    }
+
+    // Record to Firebase
+    try {
+      const scanId = await recordScan(
+        data.relicId,
+        data.relicName,
+        currentLocation,
+        data.xpEarned,
+        data.hotspotsExplored,
+        data.totalHotspots,
+      );
+
+      Alert.alert(
+        '🎉 Scan Complete!',
+        `You explored all ${data.totalHotspots} hotspots and earned ${data.xpEarned} XP!`,
+        [{ text: 'Awesome!' }],
+      );
+    } catch (error: any) {
+      console.error('❌ Error in handleScanComplete:', {
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack,
+      });
+      Alert.alert(
+        'Error',
+        `Failed to record scan: ${error?.message || String(error)}`,
+      );
     }
   };
 
@@ -91,7 +178,7 @@ const SriAR: React.FC = () => {
 
   if (!permission) {
     return (
-      <View style={styles.sriArContainer}>
+      <View style={styles.scanInterfaceContainer}>
         <Text style={styles.loadingText}>Loading camera...</Text>
       </View>
     );
@@ -99,7 +186,7 @@ const SriAR: React.FC = () => {
 
   if (!permission.granted) {
     return (
-      <View style={styles.sriArContainer}>
+      <View style={styles.scanInterfaceContainer}>
         <TouchableOpacity
           onPress={requestPermission}
           style={styles.permissionButton}
@@ -116,8 +203,12 @@ const SriAR: React.FC = () => {
 
   // SriARInterface now handles scanning, loading, and viewing internally
   return (
-    <View style={styles.sriArContainer}>
-      <SriARInterface onScanComplete={handleScanComplete} />
+    <View style={styles.scanInterfaceContainer}>
+      <ScanInterface
+        onScanComplete={handleScanComplete}
+        onViewingChange={onViewingChange}
+        relicData={relicData ?? undefined}
+      />
     </View>
   );
 };
@@ -175,36 +266,6 @@ const RelicHunterComingSoon: React.FC<{ onClose: () => void }> = ({
 };
 
 // ============================================
-// SCAN HISTORY - Placeholder
-// ============================================
-const ScanHistoryView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  return (
-    <View style={styles.relicHunterContainer}>
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Scan History</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <View style={styles.comingSoonContainer}>
-          <View style={styles.iconGlow}>
-            <Ionicons name="book" size={80} color="#00D4AA" />
-          </View>
-          <Text style={styles.relicHunterTitle}>Scan History</Text>
-          <Text style={styles.description}>
-            View all your previous scans, XP earned, and hotspots discovered.
-            This feature is under development.
-          </Text>
-        </View>
-      </SafeAreaView>
-    </View>
-  );
-};
-
-// ============================================
 // SETTINGS - Placeholder
 // ============================================
 const SettingsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -234,24 +295,180 @@ const SettingsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-// MoreMenu removed — feature deprecated
-
-// EdgeTabButton removed — feature deprecated
-
 // ============================================
 // MAIN AR SCREEN
 // ============================================
 export default function ARScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard');
+  const [isViewing, setIsViewing] = useState(false);
+  const [selectedScan, setSelectedScan] = useState<ARScan | null>(null);
+  const [allScans, setAllScans] = useState<ARScan[]>([]); // Track all scans for navigation
+  const [selectedRelicData, setSelectedRelicData] = useState<
+    RelicData | undefined
+  >(undefined);
+  const [showScanCompletion, setShowScanCompletion] = useState(false);
+  const [scanCompletionData, setScanCompletionData] = useState<{
+    totalHotspots: number;
+    xpEarned: number;
+    relicName: string;
+  } | null>(null);
+
+  // Firebase hooks
+  const { user } = useAuth();
+  const { recordScan } = useARScans(user?.uid);
+
+  // Location state
+  const [currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+
+  // Request location on mount
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        setCurrentLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+      }
+    })();
+  }, []);
+
+  // Handle scan completion
+  const handleScanComplete = async (data: {
+    relicId: string;
+    relicName: string;
+    xpEarned: number;
+    hotspotsExplored: number;
+    totalHotspots: number;
+  }) => {
+    console.log('🔍 handleScanComplete called with:', {
+      relicId: data.relicId,
+      relicName: data.relicName,
+      user: user?.uid,
+      hasLocation: !!currentLocation,
+      recordScanType: typeof recordScan,
+      recordScanDefined: !!recordScan,
+    });
+
+    // Verify recordScan is available
+    if (!recordScan || typeof recordScan !== 'function') {
+      console.error('❌ recordScan is not a function!', {
+        recordScan,
+        type: typeof recordScan,
+      });
+      Alert.alert(
+        'Error',
+        'Unable to record scan - recordScan function not available',
+      );
+      return;
+    }
+
+    // Verify user is logged in
+    if (!user) {
+      console.error('❌ User is not logged in!');
+      Alert.alert('Error', 'You must be logged in to record a scan');
+      return;
+    }
+
+    // Verify location is available
+    if (!currentLocation) {
+      console.error('❌ Current location is not available!');
+      Alert.alert('Error', 'Location permission is required to record a scan');
+      return;
+    }
+
+    // Record to Firebase
+    try {
+      const scanId = await recordScan(
+        data.relicId,
+        data.relicName,
+        currentLocation,
+        data.xpEarned,
+        data.hotspotsExplored,
+        data.totalHotspots,
+      );
+
+      // Show scan completion card instead of alert
+      setScanCompletionData({
+        totalHotspots: data.totalHotspots,
+        xpEarned: data.xpEarned,
+        relicName: data.relicName,
+      });
+      setShowScanCompletion(true);
+    } catch (error: any) {
+      console.error('❌ Error in handleScanComplete:', {
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack,
+      });
+      Alert.alert(
+        'Error',
+        `Failed to record scan: ${error?.message || String(error)}`,
+      );
+    }
+  };
 
   // Handle back navigation from scanning to dashboard
   const handleBackToDashboard = () => {
     setViewMode('dashboard');
+    setSelectedScan(null);
+    setSelectedRelicData(undefined);
   };
+
+  // Handle opening scan history
+  const handleOpenScanHistory = () => {
+    setViewMode('scan-history');
+  };
+
+  // Handle opening map progress
+  const handleMapProgress = () => {
+    setViewMode('map-progress');
+  };
+
+  // Handle selecting a relic from history
+  const handleSelectRelic = (scan: ARScan, scans?: ARScan[]) => {
+    setSelectedScan(scan);
+    if (scans && scans.length > 0) {
+      setAllScans(scans);
+      console.log(
+        `[RELIC-DETAIL] Received ${scans.length} scans for navigation`,
+      );
+    }
+    setViewMode('relic-detail');
+  };
+
+  // View in AR behavior removed — scanning is started via dashboard or other flows.
 
   // Render based on view mode
   if (viewMode === 'relic-hunter') {
     return <RelicHunterComingSoon onClose={handleBackToDashboard} />;
+  }
+
+  if (viewMode === 'scan-history') {
+    return (
+      <ScanHistory
+        onBack={handleBackToDashboard}
+        onSelectRelic={handleSelectRelic}
+      />
+    );
+  }
+
+  if (viewMode === 'relic-detail' && selectedScan) {
+    return (
+      <RelicDetailView
+        scan={selectedScan}
+        onBack={() => setViewMode('scan-history')}
+        allScans={allScans.length > 0 ? allScans : undefined}
+      />
+    );
+  }
+
+  if (viewMode === 'map-progress') {
+    return <SriLankanMapScreen onClose={handleBackToDashboard} />;
   }
 
   if (viewMode === 'scanning') {
@@ -259,20 +476,34 @@ export default function ARScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
 
-        {/* Back Button (Top-left) */}
-        <SafeAreaView style={styles.scanOverlay}>
-          <TouchableOpacity
-            style={styles.backToHomeButton}
-            onPress={handleBackToDashboard}
-          >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-        </SafeAreaView>
+        {/* Back Button (Top-left) - only show when not viewing 3D model */}
+        {!isViewing && (
+          <SafeAreaView style={styles.scanOverlay}>
+            <TouchableOpacity
+              style={styles.backToHomeButton}
+              onPress={handleBackToDashboard}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          </SafeAreaView>
+        )}
 
         {/* Main AR View */}
-        <SriAR />
+        <ScanInterface
+          onViewingChange={setIsViewing}
+          relicData={selectedRelicData}
+          onScanComplete={handleScanComplete}
+        />
 
-        {/* More option removed */}
+        {/* Scan Completion Card - appears on top of SceneCanvas */}
+        <ScanCompletionCard
+          isVisible={showScanCompletion}
+          data={scanCompletionData}
+          onClose={() => {
+            setShowScanCompletion(false);
+            setScanCompletionData(null);
+          }}
+        />
       </View>
     );
   }
@@ -281,14 +512,14 @@ export default function ARScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <ARDashboard
-        onStartScan={() => setViewMode('scanning')}
-        onViewHistory={() => {
-          // TODO: Implement scan history view
-          Alert.alert('Scan History', 'This feature is under development');
+      <RevealDashboard
+        onStartScan={() => {
+          setSelectedRelicData(undefined); // Clear any previous relic data
+          setViewMode('scanning');
         }}
+        onViewHistory={handleOpenScanHistory}
+        onSelectMapProgress={handleMapProgress}
         onViewSettings={() => {
-          // TODO: Implement settings view
           Alert.alert('Settings', 'This feature is under development');
         }}
         onSelectRelicHunter={() => setViewMode('relic-hunter')}
@@ -313,7 +544,7 @@ const styles = StyleSheet.create({
   },
 
   // Sri-AR Main Screen
-  sriArContainer: {
+  scanInterfaceContainer: {
     flex: 1,
     backgroundColor: '#0a0a0a',
   },

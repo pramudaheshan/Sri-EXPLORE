@@ -51,8 +51,10 @@ export function useUserProfile(userId: string | undefined) {
     const unsubscribe = userService.subscribeToProfile(
       userId,
       (profileData) => {
-        setProfile(profileData);
-        setLoading(false);
+        if (profileData) {
+          setProfile(profileData);
+          setLoading(false);
+        }
       },
     );
 
@@ -83,7 +85,25 @@ export function useUserProfile(userId: string | undefined) {
     [userId],
   );
 
-  return { profile, loading, error, updateProfile, addPoints };
+  // Manual refresh function
+  const refresh = useCallback(async () => {
+    if (!userId) return;
+    try {
+      console.log('🔄 Manually refreshing user profile...');
+      const freshProfile = await userService.getProfile(userId);
+      if (freshProfile) {
+        console.log('✅ Profile refreshed:', {
+          arScans: freshProfile.arScans,
+          points: freshProfile.points,
+        });
+        setProfile(freshProfile);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, [userId]);
+
+  return { profile, loading, error, updateProfile, addPoints, refresh };
 }
 
 // ============================================
@@ -91,6 +111,11 @@ export function useUserProfile(userId: string | undefined) {
 // ============================================
 export function useARScans(userId: string | undefined) {
   const [scans, setScans] = useState<ARScan[]>([]);
+  const [stats, setStats] = useState<{
+    totalScans: number;
+    totalHotspots: number;
+    streakDays: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,6 +129,15 @@ export function useARScans(userId: string | undefined) {
       setLoading(true);
       const data = await arScanService.getUserScans(userId);
       setScans(data);
+
+      // fetch aggregated stats (total counts & streak) from DB
+      try {
+        const aggregated = await arScanService.getUserStats(userId);
+        setStats(aggregated);
+      } catch (e: any) {
+        // ignore aggregated errors, keep scans list
+        console.warn('Failed to fetch aggregated scan stats', e);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -123,11 +157,27 @@ export function useARScans(userId: string | undefined) {
       xpEarned: number,
       hotspotsExplored: number,
       totalHotspots: number,
-    ) => {
-      if (!userId) return;
+    ): Promise<string> => {
+      if (!userId) {
+        const err = 'User ID is required to record a scan';
+        console.error('❌ recordScan hook: userId is missing!');
+        throw new Error(err);
+      }
+
+      if (!arScanService) {
+        const err = 'arScanService is not available!';
+        console.error('❌', err);
+        throw new Error(err);
+      }
+
+      if (typeof arScanService.recordScan !== 'function') {
+        const err = `arScanService.recordScan is not a function: ${typeof arScanService.recordScan}`;
+        console.error('❌', err);
+        throw new Error(err);
+      }
 
       try {
-        await arScanService.recordScan(
+        const scanId = await arScanService.recordScan(
           userId,
           relicId,
           relicName,
@@ -136,16 +186,102 @@ export function useARScans(userId: string | undefined) {
           hotspotsExplored,
           totalHotspots,
         );
-        // Refresh scans
+
+        if (!scanId) {
+          console.warn('⚠️ recordScan returned empty or falsy scanId:', scanId);
+          return '';
+        }
+
+        // Refresh scans and stats
         await fetchScans();
+
         // Check achievements
         await achievementService.checkAchievements(userId);
+
+        return scanId;
+      } catch (err: any) {
+        console.error('❌ Hook recordScan error:', {
+          message: err?.message,
+          code: err?.code,
+          name: err?.name,
+          stack: err?.stack?.substring(0, 200),
+        });
+        setError(err?.message || String(err));
+        throw err; // Re-throw so the caller knows it failed
+      }
+    },
+    [userId, fetchScans, stats],
+  );
+
+  const recordHotspot = useCallback(
+    async (
+      relicId: string,
+      relicName: string,
+      hotspotId: string,
+      xpEarned: number,
+    ) => {
+      if (!userId) return false;
+
+      try {
+        const recorded = await arScanService.recordHotspotExploration(
+          userId,
+          relicId,
+          relicName,
+          hotspotId,
+          xpEarned,
+        );
+        if (recorded) {
+          // Refresh scans and check achievements when a hotspot is newly recorded
+          await fetchScans();
+          await achievementService.checkAchievements(userId);
+        }
+        return recorded;
       } catch (err: any) {
         setError(err.message);
+        return false;
       }
     },
     [userId, fetchScans],
   );
+
+  const getExploredHotspots = useCallback(
+    async (relicId: string) => {
+      if (!userId) return [] as string[];
+      try {
+        const ids = await arScanService.getExploredHotspotsForRelic(
+          userId,
+          relicId,
+        );
+        return ids;
+      } catch (err: any) {
+        setError(err.message);
+        return [];
+      }
+    },
+    [userId],
+  );
+
+  const getTotalXP = useCallback(async () => {
+    if (!userId) return 0;
+    try {
+      const total = await arScanService.getUserTotalXP(userId);
+      return total;
+    } catch (err: any) {
+      setError(err.message);
+      return 0;
+    }
+  }, [userId]);
+
+  const getHotspotCount = useCallback(async () => {
+    if (!userId) return 0;
+    try {
+      const count = await arScanService.getUserHotspotCount(userId);
+      return count;
+    } catch (err: any) {
+      setError(err.message);
+      return 0;
+    }
+  }, [userId]);
 
   const hasScannedRelic = useCallback(
     async (relicId: string): Promise<boolean> => {
@@ -157,9 +293,14 @@ export function useARScans(userId: string | undefined) {
 
   return {
     scans,
+    stats,
     loading,
     error,
     recordScan,
+    recordHotspot,
+    getExploredHotspots,
+    getTotalXP,
+    getHotspotCount,
     hasScannedRelic,
     refresh: fetchScans,
   };

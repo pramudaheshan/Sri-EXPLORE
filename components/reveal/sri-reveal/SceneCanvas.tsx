@@ -19,6 +19,7 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
+import { runOnJS, useSharedValue } from 'react-native-reanimated';
 import * as THREE from 'three';
 import { HotspotData } from './DetailCard';
 
@@ -237,18 +238,23 @@ interface DynamicRelicModelProps {
     center: THREE.Vector3;
     size: THREE.Vector3;
   }) => void;
-  gestureStore: typeof gestureStore;
+  gestureX?: any; // Reanimated shared value
+  gestureRotation?: any; // Reanimated shared value
+  gestureScale?: any; // Reanimated shared value
 }
 
 function DynamicRelicModel({
   modelUrl,
   onBoundsCalculated,
-  gestureStore,
+  gestureX,
+  gestureRotation,
+  gestureScale,
   onSceneReady,
 }: DynamicRelicModelProps & { onSceneReady?: () => void }) {
   const groupRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF(modelUrl);
   const autoRotationRef = useRef(0);
+  const savedRotationRef = useRef(0);
   const [modelData, setModelData] = useState<{
     scale: number;
     offsetX: number;
@@ -331,8 +337,8 @@ function DynamicRelicModel({
       // Notify parent that the scene/model is ready (call once)
       if (onSceneReady && !onSceneReadyCalledRef.current) {
         onSceneReadyCalledRef.current = true;
-        // slight delay to let three prepare internal buffers before we reveal UI
-        setTimeout(() => onSceneReady(), 80);
+        // longer delay to ensure Three.js has fully initialized internal buffers
+        setTimeout(() => onSceneReady(), 500);
       }
     }
   }, [scene, onBoundsCalculated, onSceneReady]);
@@ -340,23 +346,35 @@ function DynamicRelicModel({
   // Read directly from gesture store every frame - no React re-renders needed
   useFrame((state, delta) => {
     if (groupRef.current && modelData) {
-      const {
-        rotationY,
-        scale: gestureScale,
-        autoRotate,
-      } = gestureStore.values;
+      // Read from Reanimated shared values (these support worklet context)
+      const rotationValue = gestureRotation?.value ?? 0;
+      const scaleValue = gestureScale?.value ?? 1;
+      const autoRotationEnabled = true; // You can make this a shared value too if needed
 
       // Auto rotation only when enabled
-      if (autoRotate) {
+      if (autoRotationEnabled) {
         autoRotationRef.current += delta * 0.1;
       }
 
       // Apply rotation directly
-      groupRef.current.rotation.y = rotationY + autoRotationRef.current;
+      groupRef.current.rotation.y = rotationValue + autoRotationRef.current;
 
-      // Apply scale directly
-      const finalScale = modelData.scale * gestureScale;
+      // Apply scale directly to children (the inner scaled group)
+      const finalScale = modelData.scale * scaleValue;
       groupRef.current.children[0]?.scale.setScalar(finalScale);
+
+      // Debug logging
+      if (groupRef.current.children[0]) {
+        const childScale = groupRef.current.children[0].scale.x;
+        if (Math.abs(childScale - finalScale) > 0.001) {
+          console.log('📊 Scale applied:', {
+            modelScale: modelData.scale,
+            gestureScale: scaleValue,
+            finalScale,
+            appliedScale: childScale,
+          });
+        }
+      }
     }
   });
 
@@ -364,6 +382,17 @@ function DynamicRelicModel({
   const clonedScene = useMemo(() => {
     if (!scene) return null;
     const cloned = scene.clone(true);
+
+    // Debug: log what's in the cloned scene
+    console.log('📦 Cloned scene structure:', {
+      childrenCount: cloned.children.length,
+      children: cloned.children.map((c, i) => ({
+        type: c.type,
+        name: (c as any).name,
+        isMesh: (c as any).isMesh,
+      })),
+    });
+
     return cloned;
   }, [scene]);
 
@@ -375,96 +404,12 @@ function DynamicRelicModel({
         scale={[modelData.scale, modelData.scale, modelData.scale]}
         position={[modelData.offsetX, modelData.offsetY, modelData.offsetZ]}
       >
+        {/* Render the cloned scene directly */}
         <primitive object={clonedScene} />
       </group>
     </group>
   );
 }
-
-// ============================================
-// SAMPLE RELIC 3D MODEL (Placeholder/Fallback)
-// ============================================
-interface RelicModelProps {
-  dimmed: boolean;
-}
-
-const SampleRelicModel: React.FC<
-  RelicModelProps & { onSceneReady?: () => void }
-> = ({ dimmed, onSceneReady }) => {
-  const groupRef = useRef<THREE.Group>(null);
-
-  useFrame((state, delta) => {
-    if (groupRef.current) {
-      // Slow rotation
-      groupRef.current.rotation.y += delta * 0.1;
-    }
-  });
-
-  useEffect(() => {
-    // Notify parent immediately for sample model
-    if (onSceneReady) {
-      setTimeout(() => onSceneReady(), 60);
-    }
-  }, [onSceneReady]);
-
-  const opacity = dimmed ? 0.6 : 1;
-
-  return (
-    <group ref={groupRef}>
-      {/* Base pedestal */}
-      <mesh position={[0, -0.8, 0]}>
-        <cylinderGeometry args={[0.6, 0.8, 0.2, 32]} />
-        <meshStandardMaterial
-          color="#4a4a4a"
-          metalness={0.3}
-          roughness={0.7}
-          transparent
-          opacity={opacity}
-        />
-      </mesh>
-
-      {/* Main artifact body - stylized ancient pillar */}
-      <mesh position={[0, 0, 0]}>
-        <cylinderGeometry args={[0.3, 0.35, 1.4, 8]} />
-        <meshStandardMaterial
-          color="#C4A55A"
-          metalness={0.4}
-          roughness={0.6}
-          transparent
-          opacity={opacity}
-        />
-      </mesh>
-
-      {/* Top ornament */}
-      <mesh position={[0, 0.85, 0]}>
-        <dodecahedronGeometry args={[0.25, 0]} />
-        <meshStandardMaterial
-          color="#FFD700"
-          metalness={0.9}
-          roughness={0.1}
-          emissive="#FFD700"
-          emissiveIntensity={0.2}
-          transparent
-          opacity={opacity}
-        />
-      </mesh>
-
-      {/* Decorative rings */}
-      {[0.3, 0, -0.3].map((y, i) => (
-        <mesh key={i} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.32, 0.03, 16, 32]} />
-          <meshStandardMaterial
-            color="#B8860B"
-            metalness={0.7}
-            roughness={0.3}
-            transparent
-            opacity={opacity}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-};
 
 // ============================================
 // SCENE LIGHTING (Bright, full illumination for true colors)
@@ -546,8 +491,9 @@ interface ARHotspotSceneProps {
   onHotspotPress: (hotspot: HotspotData) => void;
   activeHotspotId: string | null;
   model3dUrl?: string;
-  gestureStore: typeof gestureStore;
   onSceneReady?: () => void;
+  gestureRotation?: any; // Reanimated shared value
+  gestureScale?: any; // Reanimated shared value
 }
 
 const ARHotspotScene: React.FC<ARHotspotSceneProps> = ({
@@ -555,8 +501,9 @@ const ARHotspotScene: React.FC<ARHotspotSceneProps> = ({
   onHotspotPress,
   activeHotspotId,
   model3dUrl,
-  gestureStore,
   onSceneReady,
+  gestureRotation,
+  gestureScale,
 }) => {
   const [modelBounds, setModelBounds] = useState<{
     min: THREE.Vector3;
@@ -598,16 +545,15 @@ const ARHotspotScene: React.FC<ARHotspotSceneProps> = ({
       <SceneLighting />
       <CameraController focusPosition={focusPosition} />
 
-      {/* Relic Model - Use dynamic if URL provided, otherwise fallback */}
-      {model3dUrl ? (
+      {/* Relic Model - Use dynamic if URL provided */}
+      {model3dUrl && (
         <DynamicRelicModel
           modelUrl={model3dUrl}
           onBoundsCalculated={setModelBounds}
-          gestureStore={gestureStore}
+          gestureRotation={gestureRotation}
+          gestureScale={gestureScale}
           onSceneReady={onSceneReady}
         />
-      ) : (
-        <SampleRelicModel dimmed={false} onSceneReady={onSceneReady} />
       )}
 
       {/* Floating Hotspot Indicators - positioned outside model */}
@@ -630,32 +576,9 @@ const ARHotspotScene: React.FC<ARHotspotSceneProps> = ({
 };
 
 // ============================================
-// ============================================
-// GESTURE VALUES STORE (shared between gesture handler and 3D scene)
-// ============================================
-interface GestureValues {
-  rotationY: number;
-  scale: number;
-  autoRotate: boolean;
-}
-
-// Using a ref-based store to avoid React re-renders during gestures
-const gestureStore = {
-  values: { rotationY: 0, scale: 1, autoRotate: true } as GestureValues,
-  listeners: new Set<() => void>(),
-  update(partial: Partial<GestureValues>) {
-    Object.assign(this.values, partial);
-    // Don't trigger React re-renders, the 3D scene reads directly from the store
-  },
-  reset() {
-    this.values = { rotationY: 0, scale: 1, autoRotate: true };
-  },
-};
-
-// ============================================
 // EXPORTED CANVAS WRAPPER
 // ============================================
-interface ARSceneCanvasProps {
+interface SceneCanvasProps {
   hotspots: HotspotData[];
   onHotspotPress: (hotspot: HotspotData) => void;
   activeHotspotId: string | null;
@@ -664,93 +587,100 @@ interface ARSceneCanvasProps {
   onSceneReady?: () => void;
 }
 
-export const ARSceneCanvas: React.FC<ARSceneCanvasProps> = ({
+export const SceneCanvas: React.FC<SceneCanvasProps> = ({
   hotspots,
   onHotspotPress,
   activeHotspotId,
   model3dUrl,
   onSceneReady,
 }) => {
-  // Use refs for gesture values to avoid re-renders
-  const gestureRef = useRef(gestureStore.values);
-  const savedRotation = useRef(0);
-  const savedScale = useRef(1);
+  // Create Reanimated shared values that can be safely modified from worklets
+  const gestureRotation = useSharedValue(0);
+  const gestureScale = useSharedValue(1);
+  const savedRotation = useSharedValue(0);
+  const savedScale = useSharedValue(1);
+  const pinchStartScale = useSharedValue(1);
   const autoRotateTimeoutRef = useRef<number | null>(null);
 
   // Reset on mount
   useEffect(() => {
-    gestureStore.reset();
-    gestureRef.current = gestureStore.values;
+    gestureRotation.value = 0;
+    gestureScale.value = 1;
+    savedRotation.value = 0;
+    savedScale.value = 1;
     return () => {
       if (autoRotateTimeoutRef.current) {
         clearTimeout(autoRotateTimeoutRef.current);
       }
     };
-  }, []);
+  }, [gestureRotation, gestureScale, savedRotation, savedScale]);
 
-  // Pan gesture for rotation - optimized without runOnJS on update
+  // Pan gesture for rotation
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
         .onStart(() => {
           'worklet';
-          gestureStore.values.autoRotate = false;
+          // Disable auto-rotation during pan
         })
         .onUpdate((event) => {
           'worklet';
-          gestureStore.values.rotationY =
-            savedRotation.current + event.translationX * 0.01;
+          const newRotation = savedRotation.value + event.translationX * 0.01;
+          gestureRotation.value = newRotation;
         })
-        .onEnd((event) => {
+        .onEnd(() => {
           'worklet';
-          savedRotation.current =
-            savedRotation.current + event.translationX * 0.01;
-          gestureStore.values.rotationY = savedRotation.current;
+          savedRotation.value = gestureRotation.value;
         })
         .onFinalize(() => {
-          // Resume auto-rotate after delay (this runs on JS thread)
+          // Resume auto-rotate after delay (runs on JS thread)
           if (autoRotateTimeoutRef.current !== null) {
             clearTimeout(autoRotateTimeoutRef.current);
           }
-          autoRotateTimeoutRef.current = setTimeout(() => {
-            gestureStore.values.autoRotate = true;
-          }, 3000) as unknown as number;
+          autoRotateTimeoutRef.current = setTimeout(
+            () => {},
+            3000,
+          ) as unknown as number;
         }),
-    [],
+    [gestureRotation, savedRotation],
   );
 
-  // Pinch gesture for zoom - optimized
+  // Pinch gesture for zoom
   const pinchGesture = useMemo(
     () =>
       Gesture.Pinch()
         .onStart(() => {
           'worklet';
-          gestureStore.values.autoRotate = false;
+          // Store the current scale at the start of the pinch
+          pinchStartScale.value = savedScale.value;
         })
         .onUpdate((event) => {
           'worklet';
-          gestureStore.values.scale = Math.max(
-            0.5,
-            Math.min(3, savedScale.current * event.scale),
-          );
+          // Calculate new scale from the pinch start value
+          const newScale = pinchStartScale.value * event.scale;
+          const clampedScale = Math.max(0.5, Math.min(3, newScale));
+          gestureScale.value = clampedScale;
         })
         .onEnd((event) => {
           'worklet';
-          savedScale.current = Math.max(
+          // Update the saved scale for the next gesture
+          const newScale = Math.max(
             0.5,
-            Math.min(3, savedScale.current * event.scale),
+            Math.min(3, pinchStartScale.value * event.scale),
           );
-          gestureStore.values.scale = savedScale.current;
+          savedScale.value = newScale;
+          gestureScale.value = newScale;
         })
         .onFinalize(() => {
           if (autoRotateTimeoutRef.current !== null) {
             clearTimeout(autoRotateTimeoutRef.current);
           }
-          autoRotateTimeoutRef.current = setTimeout(() => {
-            gestureStore.values.autoRotate = true;
-          }, 3000) as unknown as number;
+          autoRotateTimeoutRef.current = setTimeout(
+            () => {},
+            3000,
+          ) as unknown as number;
         }),
-    [],
+    [gestureScale, savedScale, pinchStartScale],
   );
 
   // Double tap to reset
@@ -760,16 +690,16 @@ export const ARSceneCanvas: React.FC<ARSceneCanvasProps> = ({
         .numberOfTaps(2)
         .onEnd(() => {
           'worklet';
-          savedRotation.current = 0;
-          savedScale.current = 1;
-          gestureStore.values.rotationY = 0;
-          gestureStore.values.scale = 1;
-          gestureStore.values.autoRotate = true;
+          savedRotation.value = 0;
+          savedScale.value = 1;
+          pinchStartScale.value = 1;
+          gestureRotation.value = 0;
+          gestureScale.value = 1;
         }),
-    [],
+    [gestureRotation, gestureScale, savedRotation, savedScale, pinchStartScale],
   );
 
-  // Combine gestures
+  // Combine gestures - pinch and pan work simultaneously
   const composedGesture = useMemo(
     () => Gesture.Simultaneous(panGesture, pinchGesture, doubleTapGesture),
     [panGesture, pinchGesture, doubleTapGesture],
@@ -792,7 +722,8 @@ export const ARSceneCanvas: React.FC<ARSceneCanvasProps> = ({
                 activeHotspotId={activeHotspotId}
                 model3dUrl={model3dUrl}
                 onSceneReady={onSceneReady}
-                gestureStore={gestureStore}
+                gestureRotation={gestureRotation}
+                gestureScale={gestureScale}
               />
             </Suspense>
           </Canvas>
@@ -817,4 +748,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ARSceneCanvas;
+export default SceneCanvas;
