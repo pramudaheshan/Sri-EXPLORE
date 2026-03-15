@@ -10,6 +10,7 @@ import {
   Switch,
   ActivityIndicator,
   ImageBackground,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -46,7 +47,7 @@ import {
 const { width } = Dimensions.get('window');
 
 // Background image
-const backgroundImage = require('../../assets/images/profile.jpg');
+const backgroundImage = require('../../assets/images/profile.png');
 
 // Theme colors - Matching onboarding page style
 const COLORS = {
@@ -130,13 +131,33 @@ export default function ProfileScreen() {
 
   // Firebase hooks
   const { user, loading: authLoading } = useAuth();
-  const { profile, loading: profileLoading } = useUserProfile(user?.uid);
+  const {
+    profile,
+    loading: profileLoading,
+    refresh: refreshProfile,
+  } = useUserProfile(user?.uid);
   const { achievements, loading: achievementsLoading } = useAchievements(
     user?.uid,
   );
   const { scans } = useARScans(user?.uid);
 
   const loading = authLoading || profileLoading;
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      console.log('🔄 Manual profile refresh triggered');
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+    } catch (error) {
+      console.error('Error refreshing profile:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Calculate level progress
   const getCurrentLevelInfo = () => {
@@ -321,6 +342,13 @@ export default function ProfileScreen() {
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#FF6B6B"
+            />
+          }
         >
           {/* Header - Glassmorphism */}
           <View style={styles.header}>

@@ -8,14 +8,17 @@ import {
   Alert,
   ImageBackground,
   AppState,
+  Dimensions,
 } from 'react-native';
+import { useAuth, useARScans } from '../../../hooks/useFirebase';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView } from 'expo-camera';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 import { DetailCard, HotspotData } from './DetailCard';
-import { ARSceneCanvas } from './ARSceneCanvas';
+import { SceneCanvas } from './SceneCanvas';
+import modelCache from '../../../services/modelCache';
 
 // ============================================
 // RELIC DATA TYPE
@@ -39,12 +42,14 @@ interface RelicData {
   xpReward?: number;
   difficulty?: string;
   tags?: string[];
+  /** Optional viewer background preference */
+  background?: 'camera' | 'studio';
 }
 
 // ============================================
 // MAIN INTERFACE PROPS
 // ============================================
-interface SriARInterfaceProps {
+interface ScanInterfaceProps {
   // Optional - if provided, skip scanning and show AR directly
   relicData?: RelicData;
   // Callbacks
@@ -57,14 +62,18 @@ interface SriARInterfaceProps {
     hotspotsExplored: number;
     totalHotspots: number;
   }) => void;
+  // Notifies parent when internal mode becomes 'viewing' or leaves it
+  onViewingChange?: (isViewing: boolean) => void;
 }
 
-export const SriARInterface: React.FC<SriARInterfaceProps> = ({
+export const ScanInterface: React.FC<ScanInterfaceProps> = ({
   relicData: initialRelicData,
   onPointsEarned,
   onProgressUpdate,
   onScanComplete,
+  onViewingChange,
 }) => {
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
   // ============================================
   // STATE
   // ============================================
@@ -82,7 +91,6 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
   );
   const [showDetailCard, setShowDetailCard] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [totalPoints, setTotalPoints] = useState(0);
 
   // Progress bar animation
   const progressAnim = useRef(new RNAnimated.Value(0)).current;
@@ -104,7 +112,10 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
 
   // Camera low-power static preview
   const cameraRef = useRef<any>(null);
-  const [cameraMounted, setCameraMounted] = useState(true);
+  // If initial relic requests a studio background, start with camera unmounted
+  const [cameraMounted, setCameraMounted] = useState(
+    initialRelicData?.background === 'studio' ? false : true,
+  );
   const [staticPreviewUri, setStaticPreviewUri] = useState<string | null>(null);
 
   // Track whether the app paused the camera so we can resume gracefully
@@ -160,30 +171,47 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
   }, []);
 
   // When entering viewing mode, capture a frame and stop camera; restore on other modes
+  const useStudioBackground =
+    initialRelicData?.background === 'studio' || relicData?.background === 'studio';
+
   useEffect(() => {
     if (mode === 'viewing') {
-      captureStaticPreview();
+      if (!useStudioBackground) {
+        captureStaticPreview();
+      } else {
+        // Force camera off when using studio background
+        setCameraMounted(false);
+      }
     } else {
       setStaticPreviewUri(null);
-      setCameraMounted(true);
+      // Keep camera unmounted for studio backgrounds, otherwise mount it
+      setCameraMounted(!useStudioBackground);
     }
-  }, [mode, captureStaticPreview]);
+  }, [mode, captureStaticPreview, useStudioBackground]);
 
   // ============================================
   // DERIVED DATA
   // ============================================
   const displayHotspots: HotspotData[] = relicData?.hotspots
-    ? relicData.hotspots.map((spot, index) => ({
-        id: spot.id || `hotspot-${index}`,
-        title: spot.name || 'Unknown Hotspot',
-        description: spot.description || '',
-        xp: relicData.xpReward
-          ? Math.floor(
-              relicData.xpReward / Math.max(relicData.hotspots!.length, 1),
-            )
-          : 50,
-        position: spot.position || { x: 0, y: 0, z: 0 },
-      }))
+    ? relicData.hotspots.map((spot, index, arr) => {
+        const len = Math.max(arr.length, 1);
+        // Fair share distribution: floor division + remainder distributed to the first items
+        const base = relicData?.xpReward
+          ? Math.floor(relicData.xpReward / len)
+          : 50;
+        const remainder = relicData?.xpReward ? relicData.xpReward % len : 0;
+        const xp = relicData?.xpReward
+          ? base + (index < remainder ? 1 : 0)
+          : 50;
+
+        return {
+          id: spot.id || `hotspot-${index}`,
+          title: spot.name || 'Unknown Hotspot',
+          description: spot.description || '',
+          xp,
+          position: spot.position || { x: 0, y: 0, z: 0 },
+        };
+      })
     : [];
 
   const calculatedProgress =
@@ -191,12 +219,11 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
       ? Math.round((exploredHotspots.size / displayHotspots.length) * 100)
       : 0;
 
-  const totalXP =
-    totalPoints +
-    Array.from(exploredHotspots).reduce((sum, id) => {
-      const hotspot = displayHotspots.find((h) => h.id === id);
-      return sum + (hotspot?.xp || 0);
-    }, 0);
+  // Total XP is the sum of XP for explored hotspots (derives from the hotspot definitions)
+  const totalXP = Array.from(exploredHotspots).reduce((sum, id) => {
+    const hotspot = displayHotspots.find((h) => h.id === id);
+    return sum + (hotspot?.xp || 0);
+  }, 0);
 
   // ============================================
   // EFFECTS
@@ -298,6 +325,11 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
     prevModeRef.current = mode;
   }, [mode]);
 
+  // Notify parent when entering or leaving viewing mode
+  useEffect(() => {
+    onViewingChange?.(mode === 'viewing');
+  }, [mode, onViewingChange]);
+
   // Micro animation: pulse scan-corners while in scanning mode
   useEffect(() => {
     if (mode === 'scanning') {
@@ -354,6 +386,23 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
       if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, [relicData, mode]);
+
+  // Preload 3D model to reduce waiting when viewing
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!relicData?.model3dUrl) return;
+      try {
+        await modelCache.preloadModel(relicData.model3dUrl, relicData.relicId);
+      } catch (err) {
+        if (mounted) console.warn('Failed to preload model for relic:', err);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [relicData]);
 
   // Callback for when the 3D scene reports it is ready
   const handleSceneReady = useCallback(() => {
@@ -421,7 +470,6 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
   // ============================================
   const handleScanAgain = () => {
     setProgress(0);
-    setTotalPoints(0);
     setRelicData(null);
     setExploredHotspots(new Set());
     setSelectedHotspot(null);
@@ -439,13 +487,40 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
     setTimeout(() => setSelectedHotspot(null), 300);
   }, []);
 
+  const { user } = useAuth();
+  const { recordHotspot, getExploredHotspots } = useARScans(user?.uid);
+
+  // If user has previously explored hotspots for this relic (another session), load them
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!relicData) {
+        setExploredHotspots(new Set());
+        return;
+      }
+
+      if (user && getExploredHotspots) {
+        try {
+          const ids = await getExploredHotspots(relicData.relicId);
+          if (mounted) setExploredHotspots(new Set(ids));
+        } catch (err) {
+          console.warn('Failed to load explored hotspots for user:', err);
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [relicData, user, getExploredHotspots]);
+
   const handleComplete = useCallback(
-    (xp: number) => {
+    async (xp: number) => {
       if (selectedHotspot && !exploredHotspots.has(selectedHotspot.id)) {
         const newExplored = new Set([...exploredHotspots, selectedHotspot.id]);
         setExploredHotspots(newExplored);
 
-        setTotalPoints((prev) => prev + xp);
+        // Notify parent of points (UI-level)
         onPointsEarned?.(xp);
 
         const newProgress = Math.round(
@@ -453,6 +528,24 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
         );
         setProgress(newProgress);
         onProgressUpdate?.(newProgress);
+
+        // Persist per-hotspot to Firebase (if user logged in)
+        try {
+          if (user && relicData && selectedHotspot) {
+            const recorded = await recordHotspot(
+              relicData.relicId,
+              relicData.relicName,
+              selectedHotspot.id,
+              xp,
+            );
+            if (!recorded) {
+              // Already recorded on backend (no-op), but UI already updated
+              console.warn('Hotspot already recorded for user on backend');
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to persist hotspot completion:', err);
+        }
 
         if (newExplored.size === displayHotspots.length && relicData) {
           const totalXpEarned = Array.from(newExplored).reduce((sum, id) => {
@@ -478,6 +571,8 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
       onPointsEarned,
       onProgressUpdate,
       onScanComplete,
+      user,
+      recordHotspot,
     ],
   );
 
@@ -537,7 +632,7 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
         pointerEvents={mode === 'viewing' ? 'auto' : 'none'}
       >
         {relicData && (
-          <ARSceneCanvas
+          <SceneCanvas
             hotspots={displayHotspots}
             onHotspotPress={handleHotspotPress}
             activeHotspotId={selectedHotspot?.id || null}
@@ -830,6 +925,9 @@ export const SriARInterface: React.FC<SriARInterfaceProps> = ({
           hotspot={selectedHotspot}
           onClose={handleCloseCard}
           onComplete={handleComplete}
+          isCollected={
+            !!selectedHotspot && exploredHotspots.has(selectedHotspot.id)
+          }
         />
       )}
     </View>
@@ -872,6 +970,25 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     position: 'relative',
+  },
+
+  // Studio backdrop used when opening AR in studio mode (no camera)
+  studioBackground: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#070707',
+  },
+  studioSpotlight: {
+    width: Math.round(Dimensions.get('window').width * 0.75),
+    height: Math.round(Dimensions.get('window').width * 0.75),
+    borderRadius: Math.round((Dimensions.get('window').width * 0.75) / 2),
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 8,
   },
   scanCorner: {
     position: 'absolute',
@@ -1100,4 +1217,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SriARInterface;
+export default ScanInterface;

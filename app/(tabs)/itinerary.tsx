@@ -90,12 +90,10 @@ export default function TripPreferencesScreen() {
         duration={duration}
         onEdit={() => setView('modify')}
         onRegenerate={() => setView('preferences')}
-        onViewMap={() => router.push('/map')}
+        onViewMap={() => router.push('/map' as any)}
       />
     );
   }
-
-
 
   return (
     <PreferencesHub

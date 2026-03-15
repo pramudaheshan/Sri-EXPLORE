@@ -192,44 +192,95 @@ export const arScanService = {
     hotspotsExplored: number,
     totalHotspots: number,
   ): Promise<string> {
-    const scansRef = collection(db, 'arScans');
-    const docRef = await addDoc(scansRef, {
-      userId,
-      relicId,
-      relicName,
-      location,
-      xpEarned,
-      hotspotsExplored,
-      totalHotspots,
-      completedAt: serverTimestamp(),
-    });
+    if (!userId) {
+      console.error('recordScan: userId is missing');
+      return '';
+    }
 
-    // Update user stats
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, {
-      arScans: increment(1),
-      points: increment(xpEarned),
-    });
+    try {
+      // Step 1: Add scan record to arScans collection
+      const scansRef = collection(db, 'arScans');
+      const docRef = await addDoc(scansRef, {
+        userId,
+        relicId,
+        relicName,
+        location,
+        xpEarned,
+        hotspotsExplored,
+        totalHotspots,
+        completedAt: serverTimestamp(),
+      });
 
-    return docRef.id;
+      // Step 2: Update user scan count
+      // Use a simpler approach - just increment without checking if doc exists
+      // The user document should already exist from signup, but if not, this will fail gracefully
+      const userRef = doc(db, 'users', userId);
+      try {
+        await updateDoc(userRef, {
+          arScans: increment(1),
+          lastActive: serverTimestamp(),
+        });
+      } catch (updateErr: any) {
+        // If update fails (e.g., user doc doesn't exist), log but don't fail the entire scan
+        console.warn('⚠️ Failed to update user scan count:', updateErr.message);
+        // Still consider the scan successful since the arScans record was created
+      }
+
+      return docRef.id;
+    } catch (err: any) {
+      console.error('❌ recordScan failed:', err);
+      throw err;
+    }
   },
 
   // Get user's AR scan history
+  // Tries a server-side ordered query; if Firestore requires a missing composite index,
+  // fall back to a client-side sort (safer for development and avoids crash).
   async getUserScans(
     userId: string,
     limitCount: number = 20,
   ): Promise<ARScan[]> {
+    if (!userId) return [];
+
     const scansRef = collection(db, 'arScans');
-    const q = query(
-      scansRef,
-      where('userId', '==', userId),
-      orderBy('completedAt', 'desc'),
-      limit(limitCount),
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(
-      (doc) => ({ id: doc.id, ...doc.data() }) as ARScan,
-    );
+
+    try {
+      const q = query(
+        scansRef,
+        where('userId', '==', userId),
+        orderBy('completedAt', 'desc'),
+        limit(limitCount),
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() }) as ARScan,
+      );
+    } catch (err: any) {
+      // Firestore often throws an error when a composite index is required.
+      // Fall back to fetching user scans without ordering and sort client-side.
+      console.warn(
+        'getUserScans: server-side query failed, falling back to client-side sort.',
+        err?.message ?? err,
+      );
+
+      const q2 = query(scansRef, where('userId', '==', userId));
+      const snapshot2 = await getDocs(q2);
+      const docs = snapshot2.docs.map(
+        (d) => ({ id: d.id, ...d.data() }) as ARScan,
+      );
+
+      docs.sort((a: any, b: any) => {
+        const at = a.completedAt?.toDate
+          ? a.completedAt.toDate().getTime()
+          : new Date(a.completedAt || 0).getTime();
+        const bt = b.completedAt?.toDate
+          ? b.completedAt.toDate().getTime()
+          : new Date(b.completedAt || 0).getTime();
+        return bt - at; // descending
+      });
+
+      return docs.slice(0, limitCount);
+    }
   },
 
   // Check if user has scanned a specific relic
@@ -243,6 +294,204 @@ export const arScanService = {
     );
     const snapshot = await getDocs(q);
     return !snapshot.empty;
+  },
+
+  // Record a single hotspot exploration (prevents duplicates)
+  async recordHotspotExploration(
+    userId: string,
+    relicId: string,
+    relicName: string,
+    hotspotId: string,
+    xpEarned: number,
+  ): Promise<boolean> {
+    const explorationsRef = collection(db, 'hotspotExplorations');
+
+    // Check for existing exploration by user for the same hotspot
+    const q = query(
+      explorationsRef,
+      where('userId', '==', userId),
+      where('relicId', '==', relicId),
+      where('hotspotId', '==', hotspotId),
+      limit(1),
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      // Already recorded
+      return false;
+    }
+
+    // Add exploration record
+    await addDoc(explorationsRef, {
+      userId,
+      relicId,
+      relicName,
+      hotspotId,
+      xpEarned,
+      exploredAt: serverTimestamp(),
+    });
+
+    // Add points to user profile
+    await userService.addPoints(userId, xpEarned);
+
+    // Optionally trigger achievements checks elsewhere
+    return true;
+  },
+
+  async getExploredHotspotsForRelic(
+    userId: string,
+    relicId: string,
+  ): Promise<string[]> {
+    if (!userId) return [];
+    const explorationsRef = collection(db, 'hotspotExplorations');
+    const q = query(
+      explorationsRef,
+      where('userId', '==', userId),
+      where('relicId', '==', relicId),
+    );
+    const snapshot = await getDocs(q);
+    const ids: string[] = [];
+    snapshot.forEach((doc) => {
+      const data: any = doc.data();
+      if (data.hotspotId) ids.push(data.hotspotId);
+    });
+    return ids;
+  },
+
+  // Compute user's total XP by summing completed scans and per-hotspot explorations
+  async getUserTotalXP(userId: string): Promise<number> {
+    if (!userId) return 0;
+
+    let total = 0;
+
+    // Prefer summing hotspotExplorations (they represent the canonical per-hotspot XP awards).
+    // If none exist, fall back to summing arScans.xpEarned as a historical fallback.
+    const explorationsRef = collection(db, 'hotspotExplorations');
+    const q2 = query(explorationsRef, where('userId', '==', userId));
+    const expSnap = await getDocs(q2);
+    if (!expSnap.empty) {
+      expSnap.forEach((d) => {
+        const data: any = d.data();
+        total += data.xpEarned || 0;
+      });
+    } else {
+      // fallback to summing scans
+      const scansRef = collection(db, 'arScans');
+      const q1 = query(scansRef, where('userId', '==', userId));
+      const scanSnap = await getDocs(q1);
+      scanSnap.forEach((d) => {
+        const data: any = d.data();
+        total += data.xpEarned || 0;
+      });
+    }
+
+    return total;
+  },
+
+  // Count all hotspot explorations a user has completed across relics
+  async getUserHotspotCount(userId: string): Promise<number> {
+    if (!userId) return 0;
+    const explorationsRef = collection(db, 'hotspotExplorations');
+    const q = query(explorationsRef, where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    return snapshot.size;
+  },
+
+  // Compute aggregated stats for a user (total scans, hotspots, and day streak)
+  async getUserStats(userId: string): Promise<{
+    totalScans: number;
+    totalHotspots: number;
+    streakDays: number;
+  }> {
+    const scansRef = collection(db, 'arScans');
+    let docs: any[] = [];
+
+    try {
+      // Try server-side ordered query first
+      const q = query(
+        scansRef,
+        where('userId', '==', userId),
+        orderBy('completedAt', 'desc'),
+      );
+      const snapshot = await getDocs(q);
+      docs = snapshot.docs.map((d) => d.data());
+    } catch (err: any) {
+      // Fallback if composite index is required
+      console.warn(
+        'getUserStats: server-side query failed, falling back to client-side sort.',
+        err?.message ?? err,
+      );
+
+      // Query without orderBy
+      const q2 = query(scansRef, where('userId', '==', userId));
+      const snapshot2 = await getDocs(q2);
+      docs = snapshot2.docs.map((d) => d.data());
+
+      // Sort client-side
+      docs.sort((a: any, b: any) => {
+        const at = a.completedAt?.toDate
+          ? a.completedAt.toDate().getTime()
+          : new Date(a.completedAt || 0).getTime();
+        const bt = b.completedAt?.toDate
+          ? b.completedAt.toDate().getTime()
+          : new Date(b.completedAt || 0).getTime();
+        return bt - at; // descending
+      });
+    }
+
+    const totalScans = docs.length;
+
+    let totalHotspots = 0;
+    const timestamps: Date[] = [];
+
+    for (const d of docs) {
+      totalHotspots += d.hotspotsExplored || 0;
+      const ts = d.completedAt;
+      if (ts && ts.toDate) {
+        timestamps.push(ts.toDate());
+      } else if (ts instanceof Date) {
+        timestamps.push(ts);
+      }
+    }
+
+    // Calculate streak (consecutive days with scans) from sorted timestamps
+    let streakDays = 0;
+    let lastDate: Date | null = null;
+
+    for (const t of timestamps) {
+      const scanDate = new Date(t);
+      scanDate.setHours(0, 0, 0, 0);
+
+      if (!lastDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        if (
+          scanDate.getTime() === today.getTime() ||
+          scanDate.getTime() === yesterday.getTime()
+        ) {
+          streakDays = 1;
+          lastDate = scanDate;
+        } else {
+          break;
+        }
+      } else {
+        const dayDiff = Math.floor(
+          (lastDate.getTime() - scanDate.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        if (dayDiff === 1) {
+          streakDays++;
+          lastDate = scanDate;
+        } else if (dayDiff === 0) {
+          continue;
+        } else {
+          break;
+        }
+      }
+    }
+
+    return { totalScans, totalHotspots, streakDays };
   },
 };
 
@@ -458,5 +707,74 @@ export const leaderboardService = {
     const q = query(usersRef, where('points', '>', profile.points));
     const snapshot = await getDocs(q);
     return snapshot.size + 1;
+  },
+};
+
+// ============================================
+// CONFIG / APP SETTINGS SERVICES
+// ============================================
+export const configService = {
+  // Returns an ordered array of level titles with minLevel thresholds
+  // Expected doc path: config/levelTitles with shape: { titles: [{ minLevel: number, title: string }, ...] }
+  async getLevelTitles(): Promise<Array<{ minLevel: number; title: string }>> {
+    try {
+      const docRef = doc(db, 'config', 'levelTitles');
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (Array.isArray(data.titles)) {
+          return data.titles.map((t: any) => ({
+            minLevel: t.minLevel ?? t.min ?? 1,
+            title: t.title ?? 'Explorer',
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch level titles', err);
+    }
+
+    // Fallback default mapping
+    return [
+      { minLevel: 1, title: 'Novice Explorer' },
+      { minLevel: 5, title: 'Relic Seeker' },
+      { minLevel: 10, title: 'Artifact Hunter' },
+      { minLevel: 20, title: 'History Scholar' },
+      { minLevel: 30, title: 'Master Archaeologist' },
+      { minLevel: 50, title: 'Legendary Curator' },
+    ];
+  },
+
+  // Returns level thresholds by minPoints for XP-based leveling
+  // Expected doc path: config/levels with shape: { levels: [{ level: number, minPoints: number, title?: string }, ...] }
+  async getLevelConfig(): Promise<
+    Array<{ level: number; minPoints: number; title?: string }>
+  > {
+    try {
+      const docRef = doc(db, 'config', 'levels');
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (Array.isArray(data.levels)) {
+          return data.levels.map((l: any, idx: number) => ({
+            level: l.level ?? idx + 1,
+            minPoints: l.minPoints ?? l.min ?? 0,
+            title: l.title,
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch level config', err);
+    }
+
+    // Fallback default thresholds
+    return [
+      { level: 1, minPoints: 0, title: 'Beginner Explorer' },
+      { level: 2, minPoints: 500, title: 'Junior Explorer' },
+      { level: 3, minPoints: 1500, title: 'Explorer' },
+      { level: 4, minPoints: 3000, title: 'Senior Explorer' },
+      { level: 5, minPoints: 5000, title: 'Expert Explorer' },
+      { level: 6, minPoints: 10000, title: 'Master Explorer' },
+      { level: 7, minPoints: 20000, title: 'Legendary Explorer' },
+    ];
   },
 };

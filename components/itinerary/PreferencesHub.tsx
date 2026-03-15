@@ -45,10 +45,19 @@ export default function PreferencesHub({
   const [transport, setTransport] = useState(initial.transport || 'Mixed');
 
   // additional fields for detailed edit
-  const [soloData, setSoloData] = useState<{gender:string, age:string}>(initial.soloData || { gender: '', age: '' });
-  const [coupleAges, setCoupleAges] = useState<{person1:string, person2:string}>(initial.coupleAges || { person1: '', person2: '' });
-  const [familyMembers, setFamilyMembers] = useState<any[]>(initial.familyMembers || [{ role: '', age: '' }]);
-  const [friends, setFriends] = useState<any[]>(initial.friends || [{ age: '', gender: '' }]);
+  const [soloData, setSoloData] = useState<{ gender: string; age: string }>(
+    initial.soloData || { gender: '', age: '' },
+  );
+  const [coupleAges, setCoupleAges] = useState<{
+    person1: string;
+    person2: string;
+  }>(initial.coupleAges || { person1: '', person2: '' });
+  const [familyMembers, setFamilyMembers] = useState<any[]>(
+    initial.familyMembers || [{ role: '', age: '' }],
+  );
+  const [friends, setFriends] = useState<any[]>(
+    initial.friends || [{ age: '', gender: '' }],
+  );
 
   const [editMode, setEditMode] = useState(false);
 
@@ -77,7 +86,18 @@ export default function PreferencesHub({
   };
 
   const handleSave = () => {
-    const vals = { startDate, duration, group, budget, interests, transport, soloData, coupleAges, familyMembers, friends };
+    const vals = {
+      startDate,
+      duration,
+      group,
+      budget,
+      interests,
+      transport,
+      soloData,
+      coupleAges,
+      familyMembers,
+      friends,
+    };
     if (onSubmit) onSubmit(vals);
     setEditMode(false);
   };
@@ -457,9 +477,19 @@ export default function PreferencesHub({
 }
 
 const styles = StyleSheet.create({
-  container: { paddingTop: 56, paddingHorizontal: 20, paddingBottom: 18, backgroundColor: '#1a1a1a' },
+  container: {
+    paddingTop: 56,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
+    backgroundColor: '#1a1a1a',
+  },
   headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 20, fontFamily: 'Poppins-SemiBold', color: COLORS.offWhite, fontWeight: '700' },
+  title: {
+    fontSize: 20,
+    fontFamily: 'Poppins-SemiBold',
+    color: COLORS.offWhite,
+    fontWeight: '700',
+  },
   subtitle: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
   backgroundGradient: { ...StyleSheet.absoluteFillObject },
   card: {
@@ -472,12 +502,44 @@ const styles = StyleSheet.create({
   },
   rowTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   topRight: { position: 'absolute', top: 12, right: 12 },
-  editButton: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: COLORS.teal },
+  editButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderWidth: 1,
+    borderColor: COLORS.teal,
+  },
   editButtonText: { color: COLORS.teal, fontWeight: '700' },
   overTitle: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
   overValue: { fontSize: 14, fontWeight: '700', color: COLORS.offWhite },
-  label: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 8, fontWeight: '600' },
-  input: { marginTop: 8, backgroundColor: '#141414', borderRadius: 8, color: COLORS.offWhite },
+  label: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  input: {
+    marginTop: 8,
+    backgroundColor: '#141414',
+    borderRadius: 8,
+    color: COLORS.offWhite,
+  },
+  inputHalf: {
+    flex: 1,
+    marginTop: 8,
+    marginHorizontal: 4,
+    backgroundColor: '#141414',
+    borderRadius: 8,
+    color: COLORS.offWhite,
+  },
+  rowInputs: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
   radioRow: { marginTop: 6 },
   chipGroup: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
   chip: {
@@ -490,5 +552,10 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
   },
-  generateButton: { backgroundColor: COLORS.teal, marginTop: 14, borderRadius: 12, alignSelf: 'stretch' },
+  generateButton: {
+    backgroundColor: COLORS.teal,
+    marginTop: 14,
+    borderRadius: 12,
+    alignSelf: 'stretch',
+  },
 });
