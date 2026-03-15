@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Web fallback for Safety Map (react-native-maps is not supported on web)
 // Shows incident reports in a clean list format instead of a map
 

@@ -35,7 +35,7 @@ import {
 import { db, auth } from './firebase';
 
 // SafeSpot uses its own Firestore collection — completely isolated from teammates' data
-const COLLECTION = 'safespot_incidents';
+export const COLLECTION = 'safespot_incidents';
 
 // Helper: get current user ID (falls back to anonymous session ID)
 export function getCurrentUserId(): string {

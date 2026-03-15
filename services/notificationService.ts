@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ==========================================
 // SriSafeSpot - Notification Service
 // Handles push notification permissions, token

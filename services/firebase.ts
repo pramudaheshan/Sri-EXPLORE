@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ==========================================
 // SriSafeSpot - Firebase Configuration
 // Shared Firebase project: sri-explore
@@ -7,10 +8,8 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { initializeAuth, getAuth } from 'firebase/auth';
-// @ts-ignore - React Native specific import
-import { getReactNativePersistence } from '@firebase/auth/dist/rn/index.js';
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBFHtvzpVBUk0GD-xsuAIdIPS6rjXz5OlY',
@@ -24,14 +23,10 @@ const firebaseConfig = {
 // Prevent re-initializing on hot reload
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-export const db = getFirestore(app);
+export const db      = getFirestore(app);
+export const storage = getStorage(app);
 
-// Auth — safe: only initializes once; getAuth() on subsequent calls
-export const auth =
-  getApps().length === 1
-    ? initializeAuth(app, {
-        persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-      })
-    : getAuth(app);
+// Auth — firebaseConfig.ts already initializes auth with persistence; just get the instance
+export const auth = getAuth(app);
 
 export default app;

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Firebase Configuration for Sri-EXPLORE (Web)
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';

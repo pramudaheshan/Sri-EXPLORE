@@ -37,7 +37,17 @@
           "locationAlwaysAndWhenInUsePermission": "Allow Sri-EXPLORE to use your location to find nearby historic sites."
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#EF4444",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "SriSafeSpot Alert"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

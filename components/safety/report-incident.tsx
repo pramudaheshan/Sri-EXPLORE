@@ -51,6 +51,8 @@ import {
   IncidentCategory,
   getCurrentUserId,
 } from '../../services/incidentService';
+import { storage } from '../../services/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const { width } = Dimensions.get('window');
 
@@ -97,13 +99,11 @@ export default function ReportIncidentScreen() {
       Animated.spring(slideAnim, { toValue: 0, tension: 60, friction: 9, useNativeDriver: true }),
     ]).start();
     captureGPS();
-    // Check if user already has a report
-    // One-report limit disabled for testing — re-enable before final demo
-    // checkUserHasReport(getCurrentUserId()).then(has => {
-    //   setAlreadyReported(has);
-    //   setCheckingReport(false);
-    // }).catch(() => setCheckingReport(false));
-    setCheckingReport(false);
+    // Enforce one-report-per-user for authenticated users
+    checkUserHasReport(getCurrentUserId()).then(has => {
+      setAlreadyReported(has);
+      setCheckingReport(false);
+    }).catch(() => setCheckingReport(false));
   }, []);
 
   // ==========================================
@@ -212,6 +212,19 @@ export default function ReportIncidentScreen() {
   };
 
   // ==========================================
+  // Image Upload to Firebase Storage
+  // ==========================================
+
+  const uploadIncidentImage = async (uri: string, userId: string): Promise<string> => {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const filename = `${userId}_${Date.now()}.jpg`;
+    const imageRef = storageRef(storage, `safespot_incidents/${userId}/${filename}`);
+    await uploadBytes(imageRef, blob);
+    return getDownloadURL(imageRef);
+  };
+
+  // ==========================================
   // Submit Handler
   // ==========================================
 
@@ -224,6 +237,16 @@ export default function ReportIncidentScreen() {
 
     setSubmitting(true);
     try {
+      // Upload image to Firebase Storage first (if user attached one)
+      let uploadedImageUrl: string | null = null;
+      if (imageUri) {
+        try {
+          uploadedImageUrl = await uploadIncidentImage(imageUri, getCurrentUserId());
+        } catch (uploadErr) {
+          console.warn('[SafeSpot] Image upload failed, submitting without image:', uploadErr);
+        }
+      }
+
       await submitIncidentReport({
         title,
         description,
@@ -232,7 +255,7 @@ export default function ReportIncidentScreen() {
         longitude: longitude!,
         locationName,
         userId: getCurrentUserId(),
-        imageUrl: imageUri,
+        imageUrl: uploadedImageUrl,
       });
 
       setSubmitted(true);
