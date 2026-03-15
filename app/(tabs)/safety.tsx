@@ -1,658 +1,1163 @@
-import { useState } from 'react';
+// ==========================================
+// SRI-SAFESPOT - Tourist Safety Dashboard
+// Firebase real-time safety module for tourists
+// ==========================================
+// @ts-nocheck
+
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   Dimensions,
+  Animated,
+  RefreshControl,
+  Platform,
+  Alert,
+  Vibration,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import * as Location from 'expo-location';
 import {
   Shield,
-  TriangleAlert as AlertTriangle,
+  AlertTriangle,
   MapPin,
-  Phone,
-  Plus,
-  Users,
   Clock,
-  Navigation,
-  Eye,
-  MessageCircle,
-  CircleCheck as CheckCircle,
+  Users,
+  ChevronRight,
+  Map,
+  CheckCircle,
+  AlertCircle,
+  Siren,
 } from 'lucide-react-native';
 
-const { width } = Dimensions.get('window');
+import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
+import {
+  subscribeToIncidents,
+  FirestoreIncident,
+  INCIDENT_CATEGORIES,
+} from '../../services/incidentService';
+import { registerForPushNotifications } from '../../services/notificationService';
+import {
+  startBackgroundLocationTracking,
+  isBackgroundTrackingActive,
+} from '../../services/backgroundLocationTask';
 
-export default function SafetyScreen() {
-  const [selectedFilter, setSelectedFilter] = useState('all');
+const { width, height } = Dimensions.get('window');
 
-  const safetyAlerts = [
-    {
-      id: 1,
-      type: 'scam',
-      title: 'Tourist Scam Warning',
-      location: 'Fort Railway Station',
-      description:
-        'Fake taxi drivers overcharging tourists. Verify meter before starting journey.',
-      time: '2 hours ago',
-      severity: 'medium',
-      reports: 5,
-      verified: true,
-    },
-    {
-      id: 2,
-      type: 'danger',
-      title: 'Road Construction',
-      location: 'Galle Road, Colombo 3',
-      description:
-        'Major road works causing traffic delays. Use alternative routes.',
-      time: '4 hours ago',
-      severity: 'low',
-      reports: 12,
-      verified: true,
-    },
-    {
-      id: 3,
-      type: 'theft',
-      title: 'Pickpocketing Alert',
-      location: 'Pettah Market Area',
-      description:
-        'Increased pickpocketing incidents reported. Keep valuables secure.',
-      time: '6 hours ago',
-      severity: 'high',
-      reports: 8,
-      verified: false,
-    },
-    {
-      id: 4,
-      type: 'weather',
-      title: 'Heavy Rain Warning',
-      location: 'Central Province',
-      description: 'Monsoon rains expected. Avoid travel to hill country.',
-      time: '8 hours ago',
-      severity: 'high',
-      reports: 15,
-      verified: true,
-    },
-  ];
+// ==========================================
+// TYPES
+// ==========================================
 
-  const emergencyContacts = [
-    { name: 'Police Emergency', number: '119', icon: Shield },
-    { name: 'Tourist Police', number: '1912', icon: Users },
-    { name: 'Fire & Rescue', number: '110', icon: AlertTriangle },
-    { name: 'Medical Emergency', number: '1990', icon: Phone },
-  ];
+interface LocationState {
+  latitude: number;
+  longitude: number;
+  heading?: number;
+}
 
-  const filters = [
-    { key: 'all', label: 'All Alerts', count: safetyAlerts.length },
-    {
-      key: 'scam',
-      label: 'Scams',
-      count: safetyAlerts.filter((a) => a.type === 'scam').length,
-    },
-    {
-      key: 'danger',
-      label: 'Dangers',
-      count: safetyAlerts.filter((a) => a.type === 'danger').length,
-    },
-    {
-      key: 'theft',
-      label: 'Theft',
-      count: safetyAlerts.filter((a) => a.type === 'theft').length,
-    },
-  ];
+// ==========================================
+// CONSTANTS
+// ==========================================
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return '#FF6B6B';
-      case 'medium':
-        return '#F4A460';
-      case 'low':
-        return '#32CD32';
-      default:
-        return '#666';
+const EMERGENCY_NUMBERS = [
+  { label: 'Police', number: '119', icon: <Shield size={20} color={COLORS.info} /> },
+  { label: 'Ambulance', number: '110', icon: <Siren size={20} color={COLORS.critical} /> },
+  { label: 'Fire', number: '111', icon: <AlertTriangle size={20} color={COLORS.warning} /> },
+  { label: 'Tourist Police', number: '1912', icon: <Users size={20} color={COLORS.success} /> },
+];
+
+const getCategoryColor = (category: string): string => {
+  const cat = INCIDENT_CATEGORIES.find(c => c.value === category);
+  return cat?.color ?? COLORS.warning;
+};
+
+// ==========================================
+// MAIN COMPONENT
+// ==========================================
+
+export default function SafeSpotScreen() {
+  const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Firebase state
+  const [recentReports, setRecentReports] = useState<FirestoreIncident[]>([]);
+  const [totalReports, setTotalReports] = useState(0);
+  const [firestoreLoading, setFirestoreLoading] = useState(true);
+
+  // Location state
+  const [location, setLocation] = useState<LocationState | null>(null);
+  const [locationName, setLocationName] = useState('');
+
+  // UI state
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  
+  // ==========================================
+  // EFFECTS
+  // ==========================================
+
+  useEffect(() => {
+    initializeAnimations();
+    setupSafetyPermissions();
+    // Subscribe to Firebase incidents in real-time
+    const unsubscribe = subscribeToIncidents((incidents) => {
+      setRecentReports(incidents.slice(0, 5));
+      setTotalReports(incidents.length);
+      setFirestoreLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Request all permissions and start background tracking
+  const setupSafetyPermissions = async () => {
+    try {
+      // Step 1: Foreground location — phone shows its own permission dialog
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (fgStatus !== 'granted') return;
+
+      // Get current location for hub display
+      getLocation();
+
+      // Step 2: Push notification permission — phone shows its own dialog
+      await registerForPushNotifications();
+
+      // Step 3: Background location ("Always Allow") — phone shows its own dialog
+      const alreadyTracking = await isBackgroundTrackingActive();
+      if (!alreadyTracking) {
+        const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+        if (bgStatus === 'granted') {
+          await startBackgroundLocationTracking();
+        }
+      }
+    } catch (e) {
+      console.warn('[SafeSpot] Permission setup error:', e);
     }
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'scam':
-        return AlertTriangle;
-      case 'danger':
-        return Shield;
-      case 'theft':
-        return Eye;
-      case 'weather':
-        return Navigation;
-      default:
-        return Shield;
+  const getLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      const [place] = await Location.reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      if (place) setLocationName([place.street, place.city].filter(Boolean).join(', ') || 'Sri Lanka');
+    } catch (e) {
+      console.error('Location error:', e);
     }
   };
-
-  const filteredAlerts =
-    selectedFilter === 'all'
-      ? safetyAlerts
-      : safetyAlerts.filter((alert) => alert.type === selectedFilter);
-
-  const reportIncident = () => {
-    Alert.alert('Report Incident', 'Choose reporting method:', [
-      {
-        text: 'Quick Report',
-        onPress: () =>
-          Alert.alert('Quick Report', 'Quick report form would open here'),
-      },
-      {
-        text: 'Detailed Report',
-        onPress: () =>
-          Alert.alert(
-            'Detailed Report',
-            'Detailed report form would open here'
-          ),
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  
+  // Entry animations
+  const initializeAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    // Pulse animation for radar
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+  
+  const onRefresh = async () => {
+    setRefreshing(true);
+    Vibration.vibrate(50);
+    await getLocation();
+    setRefreshing(false);
+  };
+  
+  // ==========================================
+  // ACTIONS
+  // ==========================================
+  
+  const handleSOSPress = () => {
+    Vibration.vibrate([0, 100, 50, 100, 50, 100]);
+    Alert.alert(
+      '🚨 Emergency SOS',
+      'Select emergency service to call:',
+      [
+        { text: 'Police (119)', onPress: () => Linking.openURL('tel:119') },
+        { text: 'Ambulance (110)', onPress: () => Linking.openURL('tel:110') },
+        { text: 'Tourist Police (1912)', onPress: () => Linking.openURL('tel:1912') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+  
+  const handleNavigateToMap = () => {
+    router.push('/safety-map');
   };
 
-  const callEmergency = (number: string, name: string) => {
-    Alert.alert('Emergency Call', `Call ${name} at ${number}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Call',
-        onPress: () => Alert.alert('Calling', `Dialing ${number}...`),
-      },
-    ]);
+  const handleReportIncident = () => {
+    router.push('/report-incident' as any);
   };
-
-  return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <LinearGradient colors={['#FF6B6B', '#FF8E8E']} style={styles.header}>
-        <View style={styles.headerContent}>
-          <Shield size={32} color="#FFFFFF" />
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>Sri-SafeSpot</Text>
-            <Text style={styles.headerSubtitle}>Stay safe, stay informed</Text>
+  
+  // ==========================================
+  // RENDER FUNCTIONS
+  // ==========================================
+  
+  const renderHeader = () => (
+    <LinearGradient
+      colors={['rgba(0,0,0,0.8)', 'transparent']}
+      style={styles.header}
+    >
+      <View style={styles.headerContent}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoContainer}>
+            <Shield size={28} color={COLORS.primary} />
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              <View style={styles.radarDot} />
+            </Animated.View>
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>SriSafeSpot</Text>
+            <Text style={styles.headerSubtitle}>Tourist Safety Platform</Text>
           </View>
         </View>
-
-        <TouchableOpacity style={styles.reportButton} onPress={reportIncident}>
-          <Plus size={24} color="#FFFFFF" />
-          <Text style={styles.reportButtonText}>Report</Text>
+        
+        <TouchableOpacity style={styles.sosHeaderButton} onPress={handleSOSPress}>
+          <LinearGradient
+            colors={['#EF4444', '#DC2626']}
+            style={styles.sosHeaderGradient}
+          >
+            <Siren size={18} color={COLORS.white} />
+          </LinearGradient>
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
+    </LinearGradient>
+  );
 
-      {/* Safety Status */}
-      <View style={styles.statusContainer}>
-        <LinearGradient
-          colors={['#32CD32', '#90EE90']}
-          style={styles.statusCard}
-        >
-          <CheckCircle size={24} color="#FFFFFF" />
-          <Text style={styles.statusTitle}>You're in a Safe Area</Text>
-          <Text style={styles.statusLocation}>Kandy City Center</Text>
-        </LinearGradient>
+  // Recent Community Reports from Firebase
+  const renderRecentReports = () => (
+    <Animated.View
+      style={[
+        styles.resultsSection,
+        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+      ]}
+    >
+      {/* Stats Row */}
+      <View style={styles.statsRow}>
+        <BlurView intensity={40} tint="dark" style={styles.statCard}>
+          <AlertTriangle size={20} color={COLORS.warning} />
+          <Text style={styles.statNumber}>{totalReports}</Text>
+          <Text style={styles.statLabel}>Total Reports</Text>
+        </BlurView>
+        <BlurView intensity={40} tint="dark" style={styles.statCard}>
+          <MapPin size={20} color={COLORS.primary} />
+          <Text style={styles.statNumber}>{recentReports.length}</Text>
+          <Text style={styles.statLabel}>Recent Alerts</Text>
+        </BlurView>
+        <BlurView intensity={40} tint="dark" style={styles.statCard}>
+          <CheckCircle size={20} color={COLORS.success} />
+          <Text style={styles.statNumber}>Live</Text>
+          <Text style={styles.statLabel}>Real-time</Text>
+        </BlurView>
       </View>
 
-      {/* Emergency Contacts */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Emergency Contacts</Text>
-        <View style={styles.emergencyGrid}>
-          {emergencyContacts.map((contact, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.emergencyCard}
-              onPress={() => callEmergency(contact.number, contact.name)}
-            >
-              <View style={styles.emergencyIcon}>
-                <contact.icon size={24} color="#FF6B6B" />
-              </View>
-              <Text style={styles.emergencyName}>{contact.name}</Text>
-              <Text style={styles.emergencyNumber}>{contact.number}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Alert Filters */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Safety Alerts</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterContainer}
-        >
-          {filters.map((filter) => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterButton,
-                selectedFilter === filter.key && styles.filterButtonActive,
-              ]}
-              onPress={() => setSelectedFilter(filter.key)}
-            >
-              <Text
-                style={[
-                  styles.filterText,
-                  selectedFilter === filter.key && styles.filterTextActive,
-                ]}
-              >
-                {filter.label}
-              </Text>
-              <View
-                style={[
-                  styles.filterBadge,
-                  selectedFilter === filter.key && styles.filterBadgeActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.filterBadgeText,
-                    selectedFilter === filter.key &&
-                      styles.filterBadgeTextActive,
-                  ]}
-                >
-                  {filter.count}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Safety Alerts List */}
-      <View style={styles.alertsList}>
-        {filteredAlerts.map((alert) => {
-          const IconComponent = getTypeIcon(alert.type);
-          return (
-            <TouchableOpacity key={alert.id} style={styles.alertCard}>
-              <View style={styles.alertHeader}>
-                <View
-                  style={[
-                    styles.alertIcon,
-                    { backgroundColor: getSeverityColor(alert.severity) },
-                  ]}
-                >
-                  <IconComponent size={20} color="#FFFFFF" />
-                </View>
-                <View style={styles.alertInfo}>
-                  <Text style={styles.alertTitle}>{alert.title}</Text>
-                  <View style={styles.alertMeta}>
-                    <MapPin size={12} color="#666" />
-                    <Text style={styles.alertLocation}>{alert.location}</Text>
-                  </View>
-                </View>
-                <View style={styles.alertTime}>
-                  <Clock size={12} color="#666" />
-                  <Text style={styles.alertTimeText}>{alert.time}</Text>
-                </View>
-              </View>
-
-              <Text style={styles.alertDescription}>{alert.description}</Text>
-
-              <View style={styles.alertFooter}>
-                <View style={styles.alertStats}>
-                  <View style={styles.statItem}>
-                    <Users size={14} color="#666" />
-                    <Text style={styles.statText}>{alert.reports} reports</Text>
-                  </View>
-                  {alert.verified && (
-                    <View style={styles.verifiedBadge}>
-                      <CheckCircle size={12} color="#32CD32" />
-                      <Text style={styles.verifiedText}>Verified</Text>
-                    </View>
-                  )}
-                </View>
-
-                <TouchableOpacity style={styles.alertAction}>
-                  <MessageCircle size={16} color="#20B2AA" />
-                  <Text style={styles.alertActionText}>Discuss</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Map View Button */}
-      <TouchableOpacity style={styles.mapButton}>
-        <LinearGradient
-          colors={['#20B2AA', '#48D1CC']}
-          style={styles.mapButtonGradient}
-        >
-          <MapPin size={24} color="#FFFFFF" />
-          <Text style={styles.mapButtonText}>View Safety Map</Text>
+      {/* Navigation Buttons */}
+      <TouchableOpacity style={styles.mapNavBtn} onPress={handleNavigateToMap} activeOpacity={0.85}>
+        <LinearGradient colors={['rgba(32,178,170,0.25)', 'rgba(32,178,170,0.12)']} style={styles.mapNavGradient}>
+          <View style={styles.mapNavLeft}>
+            <LinearGradient colors={[COLORS.primary, COLORS.primaryLight]} style={styles.mapNavIcon}>
+              <Map size={22} color={COLORS.white} />
+            </LinearGradient>
+            <View>
+              <Text style={styles.mapNavTitle}>View Safety Map</Text>
+              <Text style={styles.mapNavSubtitle}>See live heatmap & danger zones</Text>
+            </View>
+          </View>
+          <ChevronRight size={20} color={COLORS.primary} />
         </LinearGradient>
       </TouchableOpacity>
 
-      {/* Safety Tips */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Safety Tips</Text>
-        <View style={styles.tipsContainer}>
-          <View style={styles.tipItem}>
-            <Shield size={16} color="#20B2AA" />
-            <Text style={styles.tipText}>
-              Always keep copies of important documents
-            </Text>
-          </View>
-          <View style={styles.tipItem}>
-            <Eye size={16} color="#20B2AA" />
-            <Text style={styles.tipText}>Stay aware of your surroundings</Text>
-          </View>
-          <View style={styles.tipItem}>
-            <Phone size={16} color="#20B2AA" />
-            <Text style={styles.tipText}>
-              Keep emergency contacts readily available
-            </Text>
-          </View>
+      {/* Recent Reports List */}
+      <BlurView intensity={40} tint="dark" style={styles.reportsCard}>
+        <View style={styles.reportsHeader}>
+          <AlertCircle size={18} color={COLORS.warning} />
+          <Text style={styles.reportsTitle}>Recent Incident Reports</Text>
+          {firestoreLoading && <ActivityIndicator size="small" color={COLORS.primary} />}
         </View>
+
+        {!firestoreLoading && recentReports.length === 0 && (
+          <View style={styles.emptyReports}>
+            <CheckCircle size={32} color={COLORS.success} />
+            <Text style={styles.emptyReportsText}>No recent incidents reported</Text>
+            <Text style={styles.emptyReportsSubtext}>This area appears safe</Text>
+          </View>
+        )}
+
+        {recentReports.map((report) => {
+          const cat = INCIDENT_CATEGORIES.find(c => c.value === report.category);
+          const color = cat?.color ?? COLORS.warning;
+          const ts = report.timestamp?.seconds
+            ? new Date(report.timestamp.seconds * 1000)
+            : new Date(report.timestamp);
+          const ago = (() => {
+            const diffMs = Date.now() - ts.getTime();
+            const mins = Math.floor(diffMs / 60000);
+            const hrs = Math.floor(diffMs / 3600000);
+            if (mins < 60) return `${mins}m ago`;
+            if (hrs < 24) return `${hrs}h ago`;
+            return ts.toLocaleDateString();
+          })();
+
+          return (
+            <View key={report.id} style={styles.reportItem}>
+              <View style={[styles.reportCatDot, { backgroundColor: color }]}>
+                <Text style={styles.reportCatEmoji}>{cat?.emoji ?? '📌'}</Text>
+              </View>
+              <View style={styles.reportItemContent}>
+                <Text style={styles.reportItemTitle} numberOfLines={1}>{report.title}</Text>
+                <Text style={styles.reportItemMeta}>
+                  {cat?.label ?? report.category} • {ago}
+                </Text>
+                {report.locationName ? (
+                  <Text style={styles.reportItemLocation} numberOfLines={1}>
+                    📍 {report.locationName}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={[styles.reportSeverityBadge, { backgroundColor: color + '20', borderColor: color }]}>
+                <Text style={[styles.reportSeverityText, { color }]}>
+                  {(report.flagCount ?? 0) > 0 ? `⚑ ${report.flagCount}` : 'NEW'}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </BlurView>
+    </Animated.View>
+  );
+
+  const renderQuickActions = () => (
+    <Animated.View 
+      style={[
+        styles.actionsSection,
+        { 
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
+      {/* ── Report Incident Banner ────────────────────────── */}
+      <TouchableOpacity style={styles.reportBannerBtn} onPress={handleReportIncident} activeOpacity={0.85}>
+        <LinearGradient
+          colors={['rgba(239,68,68,0.18)', 'rgba(220,38,38,0.10)']}
+          style={styles.reportBannerGradient}
+        >
+          <View style={styles.reportBannerLeft}>
+            <View style={styles.reportBannerIconWrapper}>
+              <LinearGradient colors={['#EF4444', '#DC2626']} style={styles.reportBannerIcon}>
+                <AlertTriangle size={20} color={COLORS.white} />
+              </LinearGradient>
+            </View>
+            <View>
+              <Text style={styles.reportBannerTitle}>Report an Incident</Text>
+              <Text style={styles.reportBannerSubtitle}>Warn other tourists about unsafe areas</Text>
+            </View>
+          </View>
+          <ChevronRight size={20} color={COLORS.critical} />
+        </LinearGradient>
+      </TouchableOpacity>
+
+      <Text style={[styles.sectionTitle, { marginTop: SIZES.spacing.lg }]}>Emergency Contacts</Text>
+      
+      <View style={styles.emergencyGrid}>
+        {EMERGENCY_NUMBERS.map((contact, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.emergencyCard}
+            onPress={() => Linking.openURL(`tel:${contact.number}`)}
+          >
+            <BlurView intensity={40} tint="dark" style={styles.emergencyCardContent}>
+              {contact.icon}
+              <Text style={styles.emergencyLabel}>{contact.label}</Text>
+              <Text style={styles.emergencyNumber}>{contact.number}</Text>
+            </BlurView>
+          </TouchableOpacity>
+        ))}
       </View>
-    </ScrollView>
+    </Animated.View>
+  );
+  
+  // Main Return
+  return (
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#0F172A', '#1E293B', '#0F172A']}
+        style={StyleSheet.absoluteFill}
+      />
+      
+      {renderHeader()}
+      
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
+        {/* Firebase Stats + Map Nav + Recent Reports */}
+        {renderRecentReports()}
+        
+        {/* Report Incident + Emergency Contacts */}
+        {renderQuickActions()}
+        
+        {/* Bottom Spacing */}
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    </View>
   );
 }
+
+// ==========================================
+// STYLES
+// ==========================================
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#0F172A',
   },
+  
+  // Header
   header: {
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: SIZES.spacing.lg,
+    paddingBottom: SIZES.spacing.md,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  headerContent: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: SIZES.spacing.md,
   },
-  headerText: {
-    marginLeft: 12,
+  logoContainer: {
+    position: 'relative',
+  },
+  radarDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.success,
   },
   headerTitle: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
-    color: '#FFFFFF',
+    color: COLORS.white,
+    fontSize: SIZES.xl,
+    fontWeight: '700',
   },
   headerSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    color: '#FFFFFF',
-    opacity: 0.9,
+    color: COLORS.gray[400],
+    fontSize: SIZES.sm,
   },
-  reportButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+  sosHeaderButton: {
+    borderRadius: SIZES.radius.full,
+    overflow: 'hidden',
+    ...SHADOWS.md,
   },
-  reportButtonText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#FFFFFF',
-    marginLeft: 4,
+  sosHeaderGradient: {
+    padding: SIZES.spacing.md,
   },
-  statusContainer: {
-    padding: 20,
-  },
-  statusCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-  },
-  statusTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#FFFFFF',
-    marginLeft: 12,
+  
+  // Scroll
+  scrollView: {
     flex: 1,
   },
-  statusLocation: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#FFFFFF',
-    opacity: 0.9,
+  scrollContent: {
+    paddingHorizontal: SIZES.spacing.lg,
   },
-  section: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
+  
+  // Selector Sections
+  selectorSection: {
+    marginBottom: SIZES.spacing.md,
   },
+  selectorCard: {
+    borderRadius: SIZES.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: SIZES.spacing.md,
+  },
+  selectorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SIZES.spacing.md,
+    gap: SIZES.spacing.sm,
+  },
+  selectorTitle: {
+    color: COLORS.white,
+    fontSize: SIZES.md,
+    fontWeight: '600',
+    flex: 1,
+  },
+  nowButton: {
+    paddingHorizontal: SIZES.spacing.md,
+    paddingVertical: SIZES.spacing.xs,
+    backgroundColor: 'rgba(32, 178, 170, 0.2)',
+    borderRadius: SIZES.radius.full,
+  },
+  nowButtonText: {
+    color: COLORS.primary,
+    fontSize: SIZES.sm,
+    fontWeight: '600',
+  },
+  
+  // User Type
+  userTypeList: {
+    gap: SIZES.spacing.sm,
+    paddingRight: SIZES.spacing.md,
+  },
+  userTypeChip: {
+    alignItems: 'center',
+    paddingHorizontal: SIZES.spacing.md,
+    paddingVertical: SIZES.spacing.sm,
+    borderRadius: SIZES.radius.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    minWidth: 75,
+  },
+  userTypeChipActive: {
+    backgroundColor: 'rgba(32, 178, 170, 0.25)',
+    borderColor: COLORS.primary,
+  },
+  userTypeEmoji: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  userTypeLabel: {
+    color: COLORS.gray[400],
+    fontSize: SIZES.xs,
+    textAlign: 'center',
+  },
+  userTypeLabelActive: {
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  
+  // Time Slots
+  timeSlotList: {
+    gap: SIZES.spacing.sm,
+    paddingRight: SIZES.spacing.md,
+  },
+  timeSlotChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.spacing.xs,
+    paddingHorizontal: SIZES.spacing.md,
+    paddingVertical: SIZES.spacing.sm,
+    borderRadius: SIZES.radius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  timeSlotChipActive: {
+    backgroundColor: 'rgba(32, 178, 170, 0.25)',
+    borderColor: COLORS.primary,
+  },
+  timeSlotLabel: {
+    color: COLORS.gray[400],
+    fontSize: SIZES.sm,
+  },
+  timeSlotLabelActive: {
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  
+  // Safety Card
+  safetyCardSection: {
+    marginBottom: SIZES.spacing.lg,
+  },
+  
+  // Map Section
+  mapSection: {
+    marginBottom: SIZES.spacing.lg,
+  },
+  mapCard: {
+    borderRadius: SIZES.radius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  mapHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SIZES.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  mapHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.spacing.sm,
+  },
+  mapTitle: {
+    color: COLORS.white,
+    fontSize: SIZES.md,
+    fontWeight: '600',
+  },
+  expandMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  expandMapText: {
+    color: COLORS.primary,
+    fontSize: SIZES.sm,
+    fontWeight: '600',
+  },
+  mapContainer: {
+    height: 200,
+    position: 'relative',
+  },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapMarkerScore: {
+    color: COLORS.white,
+    fontSize: SIZES.sm,
+    fontWeight: '700',
+  },
+  userLocationMarker: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(32, 178, 170, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userLocationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  mapControls: {
+    position: 'absolute',
+    top: SIZES.spacing.md,
+    right: SIZES.spacing.md,
+  },
+  mapControlButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.sm,
+  },
+  mapLegend: {
+    position: 'absolute',
+    bottom: SIZES.spacing.sm,
+    left: SIZES.spacing.sm,
+    flexDirection: 'row',
+    gap: SIZES.spacing.md,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: SIZES.spacing.sm,
+    paddingVertical: SIZES.spacing.xs,
+    borderRadius: SIZES.radius.full,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    color: COLORS.white,
+    fontSize: SIZES.xs,
+  },
+  
+  // Quick Actions
+  actionsSection: {
+    marginBottom: SIZES.spacing.lg,
+  },
+
+  // Firebase stats / recent reports
+  statsRow: {
+    flexDirection: 'row',
+    gap: SIZES.spacing.sm,
+    marginBottom: SIZES.spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: SIZES.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    padding: SIZES.spacing.md,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statNumber: {
+    color: COLORS.white,
+    fontSize: SIZES.lg,
+    fontWeight: '700',
+  },
+  statLabel: {
+    color: COLORS.gray[400],
+    fontSize: SIZES.xs,
+    textAlign: 'center',
+  },
+  mapNavBtn: {
+    borderRadius: SIZES.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(32,178,170,0.35)',
+    marginBottom: SIZES.spacing.md,
+    ...SHADOWS.md,
+  },
+  mapNavGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SIZES.spacing.md,
+  },
+  mapNavLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.spacing.md,
+  },
+  mapNavIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: SIZES.radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapNavTitle: {
+    color: COLORS.white,
+    fontSize: SIZES.md,
+    fontWeight: '700',
+  },
+  mapNavSubtitle: {
+    color: COLORS.gray[400],
+    fontSize: SIZES.xs,
+    marginTop: 2,
+  },
+  reportsCard: {
+    borderRadius: SIZES.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    padding: SIZES.spacing.md,
+    marginBottom: SIZES.spacing.md,
+  },
+  reportsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.spacing.sm,
+    marginBottom: SIZES.spacing.md,
+  },
+  reportsTitle: {
+    color: COLORS.white,
+    fontSize: SIZES.md,
+    fontWeight: '700',
+    flex: 1,
+  },
+  emptyReports: {
+    alignItems: 'center',
+    padding: SIZES.spacing.xl,
+    gap: SIZES.spacing.sm,
+  },
+  emptyReportsText: {
+    color: COLORS.white,
+    fontSize: SIZES.md,
+    fontWeight: '600',
+  },
+  emptyReportsSubtext: {
+    color: COLORS.gray[400],
+    fontSize: SIZES.sm,
+  },
+  reportItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SIZES.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.07)',
+    gap: SIZES.spacing.sm,
+  },
+  reportCatDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reportCatEmoji: {
+    fontSize: 16,
+  },
+  reportItemContent: {
+    flex: 1,
+  },
+  reportItemTitle: {
+    color: COLORS.white,
+    fontSize: SIZES.sm,
+    fontWeight: '600',
+  },
+  reportItemMeta: {
+    color: COLORS.gray[400],
+    fontSize: SIZES.xs,
+    marginTop: 2,
+  },
+  reportItemLocation: {
+    color: COLORS.gray[500],
+    fontSize: SIZES.xs,
+    marginTop: 1,
+  },
+  reportSeverityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: SIZES.radius.full,
+    borderWidth: 1,
+  },
+  reportSeverityText: {
+    fontSize: SIZES.xs,
+    fontWeight: '700',
+  },
+
+  // Report Incident Banner
+  reportBannerBtn: {
+    borderRadius: SIZES.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    ...SHADOWS.md,
+  },
+  reportBannerGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SIZES.spacing.lg,
+    paddingVertical: SIZES.spacing.lg,
+  },
+  reportBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.spacing.md,
+    flex: 1,
+  },
+  reportBannerIconWrapper: {
+    borderRadius: SIZES.radius.md,
+    overflow: 'hidden',
+  },
+  reportBannerIcon: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: SIZES.radius.md,
+  },
+  reportBannerTitle: {
+    color: COLORS.white,
+    fontSize: SIZES.base,
+    fontWeight: '700',
+  },
+  reportBannerSubtitle: {
+    color: COLORS.gray[400],
+    fontSize: SIZES.sm,
+    marginTop: 2,
+  },
+
   sectionTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#333',
-    marginBottom: 16,
+    color: COLORS.white,
+    fontSize: SIZES.base,
+    fontWeight: '600',
   },
   emergencyGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    gap: SIZES.spacing.md,
+    marginTop: SIZES.spacing.md,
   },
   emergencyCard: {
-    width: (width - 60) / 2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  emergencyIcon: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#FFF5F5',
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  emergencyName: {
-    fontSize: 12,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  emergencyNumber: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    color: '#FF6B6B',
-  },
-  filterContainer: {
-    marginBottom: 16,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 12,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  filterButtonActive: {
-    backgroundColor: '#20B2AA',
-  },
-  filterText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
-    color: '#666',
-  },
-  filterTextActive: {
-    color: '#FFFFFF',
-  },
-  filterBadge: {
-    backgroundColor: '#E0E0E0',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 8,
-  },
-  filterBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  filterBadgeText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Bold',
-    color: '#666',
-  },
-  filterBadgeTextActive: {
-    color: '#FFFFFF',
-  },
-  alertsList: {
-    paddingHorizontal: 20,
-  },
-  alertCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  alertHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  alertIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  alertInfo: {
-    flex: 1,
-  },
-  alertTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  alertMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  alertLocation: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginLeft: 4,
-  },
-  alertTime: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  alertTimeText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginLeft: 4,
-  },
-  alertDescription: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  alertFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  alertStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  statText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginLeft: 4,
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  verifiedText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    color: '#32CD32',
-    marginLeft: 4,
-  },
-  alertAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  alertActionText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    color: '#20B2AA',
-    marginLeft: 4,
-  },
-  mapButton: {
-    margin: 20,
-    borderRadius: 16,
+    width: (width - SIZES.spacing.lg * 2 - SIZES.spacing.md) / 2,
+    borderRadius: SIZES.radius.lg,
     overflow: 'hidden',
   },
-  mapButtonGradient: {
-    flexDirection: 'row',
+  emergencyCardContent: {
+    padding: SIZES.spacing.md,
+    alignItems: 'center',
+    gap: SIZES.spacing.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: SIZES.radius.lg,
+  },
+  emergencyLabel: {
+    color: COLORS.white,
+    fontSize: SIZES.sm,
+    fontWeight: '500',
+  },
+  emergencyNumber: {
+    color: COLORS.primary,
+    fontSize: SIZES.lg,
+    fontWeight: '700',
+  },
+  
+  // ==========================================
+  // SAFETY RESULTS STYLES
+  // ==========================================
+  resultsSection: {
+    marginBottom: SIZES.spacing.lg,
+    gap: SIZES.spacing.md,
+  },
+  loadingCard: {
+    borderRadius: SIZES.radius.lg,
+    padding: SIZES.spacing.xl,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    gap: SIZES.spacing.md,
   },
-  mapButtonText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#FFFFFF',
-    marginLeft: 8,
+  loadingText: {
+    color: COLORS.white,
+    fontSize: SIZES.md,
+    fontWeight: '600',
   },
-  tipsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+  loadingSubtext: {
+    color: COLORS.gray[400],
+    fontSize: SIZES.sm,
   },
-  tipItem: {
+  mainScoreCard: {
+    borderRadius: SIZES.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: SIZES.spacing.lg,
+  },
+  locationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    marginBottom: SIZES.spacing.lg,
+    gap: SIZES.spacing.md,
   },
-  tipText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginLeft: 12,
+  locationEmoji: {
+    fontSize: 36,
+  },
+  locationName: {
+    color: COLORS.white,
+    fontSize: SIZES.lg,
+    fontWeight: '700',
+  },
+  locationCategory: {
+    color: COLORS.gray[400],
+    fontSize: SIZES.sm,
+  },
+  scoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.spacing.lg,
+  },
+  scoreBadge: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreNumber: {
+    color: COLORS.white,
+    fontSize: 36,
+    fontWeight: '800',
+  },
+  scoreLabel: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: SIZES.xs,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  riskInfo: {
     flex: 1,
+    gap: SIZES.spacing.sm,
+  },
+  riskBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: SIZES.spacing.md,
+    paddingVertical: SIZES.spacing.sm,
+    borderRadius: SIZES.radius.full,
+    borderWidth: 1,
+    gap: SIZES.spacing.xs,
+  },
+  riskBadgeText: {
+    fontSize: SIZES.md,
+    fontWeight: '700',
+  },
+  riskDescription: {
+    color: COLORS.gray[300],
+    fontSize: SIZES.sm,
+    lineHeight: 20,
+  },
+  fullMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SIZES.spacing.lg,
+    paddingVertical: SIZES.spacing.md,
+    backgroundColor: 'rgba(32, 178, 170, 0.15)',
+    borderRadius: SIZES.radius.md,
+    gap: SIZES.spacing.sm,
+  },
+  fullMapBtnText: {
+    color: COLORS.primary,
+    fontSize: SIZES.md,
+    fontWeight: '600',
+  },
+  analysisCard: {
+    borderRadius: SIZES.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: SIZES.spacing.lg,
+  },
+  analysisHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.spacing.sm,
+    marginBottom: SIZES.spacing.md,
+  },
+  analysisTitle: {
+    color: COLORS.white,
+    fontSize: SIZES.md,
+    fontWeight: '700',
+  },
+  explanationsList: {
+    gap: SIZES.spacing.sm,
+  },
+  explanationItem: {
+    padding: SIZES.spacing.md,
+    borderRadius: SIZES.radius.md,
+    borderLeftWidth: 3,
+  },
+  explanationFactor: {
+    color: COLORS.white,
+    fontSize: SIZES.sm,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  explanationText: {
+    color: COLORS.gray[300],
+    fontSize: SIZES.sm,
+    lineHeight: 20,
+  },
+  suggestionsCard: {
+    borderRadius: SIZES.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: SIZES.spacing.lg,
+  },
+  suggestionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SIZES.spacing.sm,
+    marginBottom: SIZES.spacing.md,
+  },
+  suggestionsTitle: {
+    color: COLORS.white,
+    fontSize: SIZES.md,
+    fontWeight: '700',
+  },
+  suggestionsList: {
+    gap: SIZES.spacing.sm,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SIZES.spacing.sm,
+  },
+  suggestionText: {
+    flex: 1,
+    color: COLORS.gray[300],
+    fontSize: SIZES.sm,
+    lineHeight: 20,
+  },
+  contextCard: {
+    borderRadius: SIZES.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: SIZES.spacing.md,
+  },
+  contextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  contextItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  contextLabel: {
+    color: COLORS.gray[500],
+    fontSize: SIZES.xs,
+  },
+  contextValue: {
+    color: COLORS.white,
+    fontSize: SIZES.sm,
+    fontWeight: '600',
   },
 });
