@@ -275,15 +275,8 @@ export default function SafetyMapScreen() {
     return 0.32 + Math.max(0, maxW - 0.25) * 0.667;
   }, [heatmapPoints]);
 
-  // ── Heatmap uses a fixed 45 px radius ────────────────────────────────────
-  //
-  //  A fixed pixel radius is stable across all zoom levels — no remounting,
-  //  no flickering. The Gaussian kernel naturally represents different real-
-  //  world areas at different zoom levels (smaller at street zoom, covering
-  //  a wider area at city/country zoom) which is the standard behaviour for
-  //  professional heatmap visualisations.
-  //
-  const HEATMAP_RADIUS = 500;
+  // ── Heatmap radius (small value = less dramatic scaling on zoom out) ─────
+  const HEATMAP_RADIUS = 160;
 
 
 
@@ -804,13 +797,7 @@ export default function SafetyMapScreen() {
         onRegionChangeComplete={setCurrentRegion}
         onPress={isPickMode ? (e: MapPressEvent) => setPickedCoord(e.nativeEvent.coordinate) : undefined}
       >
-        {/* ── HEATMAP LAYER ───────────────────────────────────────────────────
-             mapReady guard ensures the Google Maps SDK is fully initialised
-             before mounting the native heatmap — prevents the invisible-on-
-             first-open bug. Static key + fixed radius means the native tile
-             layer is NEVER remounted during zoom, eliminating all flickering.
-             The Gaussian kernel naturally represents narrower real-world areas
-             at street zoom and broader areas at country zoom with no extra code. */}
+        {/* ── HEATMAP LAYER ─────────────────────────────────────────────────── */}
         {mapReady && showHeatmap && heatmapPoints.length > 0 && (
           <Heatmap
             key="safespot-heatmap"
@@ -818,10 +805,6 @@ export default function SafetyMapScreen() {
             radius={HEATMAP_RADIUS}
             opacity={heatmapOpacity}
             gradient={{
-              // startPoints push red down to 0.65 so high-intensity clusters
-              // show a clearly red centre rather than staying orange.
-              // The range 0.65→1.0 (35% of the spectrum) is fully red,
-              // making hotspots visually unambiguous.
               colors:       ['rgba(0,0,0,0)', '#2ecc71', '#f1c40f', '#ff4005', '#ff0000'],
               startPoints:  [0.0,              0.05,      0.30,      0.55,      0.65],
               colorMapSize: 256,
