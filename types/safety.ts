@@ -145,7 +145,7 @@ export interface PriceGuide {
 }
 
 // ============ SAFE PLACES ============
-export type SafePlaceType = 'hospital' | 'police' | 'embassy' | 'hotel' | 'tourist_center' | 'pharmacy';
+export type SafePlaceType = 'hospital' | 'police' | 'embassy' | 'hotel' | 'tourist_center' | 'pharmacy' | 'airport';
 
 export interface SafePlace {
   id: string;

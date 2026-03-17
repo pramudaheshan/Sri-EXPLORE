@@ -31,6 +31,10 @@ import {
   updateDoc,
   increment,
   limit,
+  deleteDoc,
+  getDoc,
+  setDoc,
+  runTransaction,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
@@ -135,11 +139,19 @@ export function subscribeToIncidents(
 
 /**
  * Flag a report as potentially false/incorrect.
- * If flagCount reaches 5, it is hidden from the map.
+ * Auto-deletes the document if flagCount reaches 3.
  */
 export async function flagIncidentReport(incidentId: string): Promise<void> {
-  await updateDoc(doc(db, COLLECTION, incidentId), {
-    flagCount: increment(1),
+  const docRef = doc(db, COLLECTION, incidentId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(docRef);
+    if (!snap.exists()) return;
+    const current = (snap.data().flagCount ?? 0) as number;
+    if (current + 1 >= 3) {
+      tx.delete(docRef);
+    } else {
+      tx.update(docRef, { flagCount: increment(1) });
+    }
   });
 }
 
@@ -154,72 +166,138 @@ export async function checkUserHasReport(userId: string): Promise<boolean> {
   return !snap.empty;
 }
 
-const CLUSTER_RADIUS_M = 800; // 800m cluster radius
+// ── Heatmap computation ──────────────────────────────────────────────────────
 
-/** Haversine distance in metres between two points */
-function distanceMetres(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+/**
+ * Base influence radius at max zoom-in.
+ * Matches INFLUENCE_RADIUS_METERS constant in safety-map.tsx.
+ */
+export const INFLUENCE_RADIUS_BASE_M = 300;
+
+/**
+ * Haversine distance in metres between two coordinate pairs.
+ * Used for neighbour-counting and geofence proximity alerts.
+ */
+export function haversineMeters(
+  aLat: number, aLng: number,
+  bLat: number, bLng: number
+): number {
+  const R = 6_371_000;
+  const dLat = (bLat - aLat) * Math.PI / 180;
+  const dLon = (bLng - aLng) * Math.PI / 180;
+  const lat1 = aLat * Math.PI / 180;
+  const lat2 = bLat * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/** Map incident category to a severity score 0–1 */
-function categorySeverity(category: string): number {
-  const map: Record<string, number> = {
-    robbery: 1.0,
-    natural_disaster: 1.0,
-    harassment: 0.67,
-    accident: 0.67,
-    unsafe_area: 0.67,
-    scam: 0.33,
-    other: 0.33,
-  };
-  return map[category] ?? 0.33;
-}
-
-/** Recentness score: fresher = higher weight */
-function recentnessScore(timestamp: any): number {
-  let ts: number;
-  if (timestamp?.seconds) ts = timestamp.seconds * 1000;
-  else if (timestamp?.toDate) ts = timestamp.toDate().getTime();
-  else ts = new Date(timestamp).getTime();
-  const ageHours = (Date.now() - ts) / 3600000;
-  if (ageHours < 6)  return 1.0;
-  if (ageHours < 24) return 0.7;
-  if (ageHours < 72) return 0.5;
-  return 0.2;
+/**
+ * Map nearby-incident count → heat weight.
+ *
+ * | total in zone (self + nearby) | weight | colour  |
+ * |-------------------------------|--------|---------|
+ * | 1                             |  0.25  | green   |
+ * | 2                             |  0.50  | yellow  |
+ * | 3                             |  0.75  | orange  |
+ * | 3 or more                     |  1.0   | red     |
+ *
+ * nearbyCount = OTHER incidents within 300 m (excluding self).
+ * totalInZone = nearbyCount + 1 (counting self).
+ */
+function densityWeight(nearbyCount: number): number {
+  const total = nearbyCount + 1;
+  if (total === 1) return 0.25;  // lone report       → green
+  if (total === 2) return 0.50;  // 2 in zone         → yellow
+  if (total === 3) return 0.75;  // 3 in zone         → orange
+  return 1.0;                    // 4+ in zone        → red
 }
 
 /**
- * Compute density-based heatmap points.
- * weight = (severity × 0.6) + (recentness × 0.3) + (clusterDensity × 0.1)
- * Each incident produces one point — nearby reports naturally stack in the heatmap.
+ * Convert Firestore incidents into weighted heatmap points for
+ * react-native-maps <Heatmap points={...} />.
+ *
+ * Neighbour radius is fixed at INFLUENCE_RADIUS_BASE_M (300 m).
+ * The actual rendered pixel radius is computed separately in the
+ * map component using the current zoom level (latitudeDelta).
  */
 export function computeHeatmapPoints(
   incidents: FirestoreIncident[]
 ): { latitude: number; longitude: number; weight: number }[] {
-  const valid = incidents.filter(i => i.latitude && i.longitude);
+  const valid = incidents.filter(
+    i => typeof i.latitude === 'number' && typeof i.longitude === 'number'
+  );
   if (!valid.length) return [];
 
-  return valid.map(incident => {
-    const severity    = categorySeverity(incident.category);
-    const recentness  = recentnessScore(incident.timestamp);
-
-    // count neighbours within 800m (excluding self)
-    const neighbours  = valid.filter(
-      other => other.id !== incident.id &&
-        distanceMetres(incident.latitude, incident.longitude, other.latitude, other.longitude) <= CLUSTER_RADIUS_M
+  return valid.map(inc => {
+    const nearbyCount = valid.filter(
+      other =>
+        other.id !== inc.id &&
+        haversineMeters(
+          inc.latitude, inc.longitude,
+          other.latitude, other.longitude
+        ) <= INFLUENCE_RADIUS_BASE_M
     ).length;
-    const clusterDensity = Math.min(1.0, neighbours / 5);
 
-    const weight = (severity * 0.6) + (recentness * 0.3) + (clusterDensity * 0.1);
     return {
-      latitude: incident.latitude,
-      longitude: incident.longitude,
-      weight: Math.min(1.0, weight),
+      latitude:  inc.latitude,
+      longitude: inc.longitude,
+      weight:    densityWeight(nearbyCount),
     };
   });
+}
+
+// ── User-specific incident functions ─────────────────────────────────────────
+
+/**
+ * Fetch all incidents submitted by the given user, newest first.
+ */
+export async function getUserIncidents(userId: string): Promise<FirestoreIncident[]> {
+  // Only filter by userId — no orderBy to avoid needing a composite Firestore index.
+  // Sort newest-first in JS after fetching.
+  const q = query(
+    collection(db, COLLECTION),
+    where('userId', '==', userId)
+  );
+  const snap = await getDocs(q);
+  const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as FirestoreIncident));
+  // Sort by timestamp descending (client-side)
+  return docs.sort((a, b) => {
+    const ta = a.timestamp?.seconds ?? 0;
+    const tb = b.timestamp?.seconds ?? 0;
+    return tb - ta;
+  });
+}
+
+/**
+ * Delete a specific incident (user can only delete their own — enforce in UI).
+ */
+export async function deleteUserIncident(incidentId: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTION, incidentId));
+}
+
+// ── Emergency contact ─────────────────────────────────────────────────────────
+
+const USERS_COL = 'safespot_users';
+
+export interface EmergencyContact {
+  name: string;
+  phone: string;
+}
+
+/**
+ * Save (or replace) the user's emergency contact in Firestore.
+ */
+export async function saveEmergencyContact(userId: string, contact: EmergencyContact): Promise<void> {
+  await setDoc(doc(db, USERS_COL, userId), { emergencyContact: contact }, { merge: true });
+}
+
+/**
+ * Load the user's saved emergency contact. Returns null if none saved.
+ */
+export async function getEmergencyContact(userId: string): Promise<EmergencyContact | null> {
+  const snap = await getDoc(doc(db, USERS_COL, userId));
+  if (!snap.exists()) return null;
+  return (snap.data().emergencyContact as EmergencyContact) ?? null;
 }

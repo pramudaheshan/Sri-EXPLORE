@@ -10,10 +10,18 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sriexplore.app"
+      "bundleIdentifier": "com.sriexplore.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyAMc668klhMfo0kNQS2Ylldz7g28xBt418"
+      }
     },
     "android": {
-      "package": "com.sriexplore.app"
+      "package": "com.sriexplore.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAMc668klhMfo0kNQS2Ylldz7g28xBt418"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
