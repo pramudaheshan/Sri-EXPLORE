@@ -22,6 +22,7 @@ import {
   Keyboard,
   StatusBar,
   Modal,
+  Image,
   KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -616,6 +617,9 @@ export default function SafetyMapScreen() {
         </View>
         {selectedReport.description ? (
           <Text style={S.incidentDesc} numberOfLines={3}>{selectedReport.description}</Text>
+        ) : null}
+        {selectedReport.imageUrl ? (
+          <Image source={{ uri: selectedReport.imageUrl }} style={S.incidentImage} resizeMode="cover" />
         ) : null}
         <View style={S.actionRow}>
           <TouchableOpacity style={S.actionBtn} onPress={() => {
@@ -1356,6 +1360,9 @@ const S = StyleSheet.create({
   incidentDesc: {
     color: '#94A3B8', fontSize: 13, fontFamily: 'Poppins-Regular',
     lineHeight: 20, marginBottom: 14,
+  },
+  incidentImage: {
+    width: '100%', height: 160, borderRadius: 12, marginBottom: 14,
   },
   actionRow: { flexDirection: 'row', gap: 10 },
   actionBtn: {
