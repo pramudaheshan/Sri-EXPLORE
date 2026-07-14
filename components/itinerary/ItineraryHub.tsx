@@ -1,269 +1,278 @@
-import React from 'react';
+import React from "react";
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
-  Dimensions,
-  Image,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import {
-  Calendar,
-  MapPin,
-  Clock,
-  ChevronRight,
-  Edit2,
-  RefreshCw,
-  Map,
-} from 'lucide-react-native';
+  TouchableOpacity
+} from "react-native";
 
-const { width } = Dimensions.get('window');
-const TEAL = '#20B2AA';
+import { LinearGradient } from "expo-linear-gradient";
+
+import {
+  Clock,
+  RefreshCw
+} from "lucide-react-native";
+
+const TEAL = "#20B2AA";
 
 const COLORS = {
-  teal: TEAL,
-  offWhite: '#F0F4F3',
-  glass: 'rgba(255,255,255,0.08)',
-  glassBorder: 'rgba(255,255,255,0.15)',
-  glassLight: 'rgba(255,255,255,0.05)',
-  gray: '#B8C4C2',
-  darkText: '#12322f',
+  bg: "#0c1414",
+  card: "#101c1c",
+  cardBorder: "rgba(255,255,255,0.05)",
+  text: "#eaf4f3",
+  muted: "#9fb3b1",
+  teal: TEAL
 };
 
-type Day = {
-  day: number;
-  location: string;
-  summary: string;
-};
-
-export default function ItineraryHub({
-  title = 'Your Smart Itinerary',
-  startDate = '2025-07-01',
-  duration = 3,
-  upcoming = sampleDays,
-  onEdit,
-  onRegenerate,
-  onViewMap,
-}: {
+type ItineraryHubProps = {
   title?: string;
   startDate?: string;
   duration?: number;
-  upcoming?: Day[];
+  city?: string;
   onEdit?: () => void;
   onRegenerate?: () => void;
   onViewMap?: () => void;
-}) {
+  itinerary?: Record<string, any>;
+};
+
+export default function ItineraryHub({
+  title = "Your AI Travel Plan",
+  startDate,
+  duration,
+  city,
+  onEdit,
+  onRegenerate,
+  onViewMap,
+  itinerary
+}: ItineraryHubProps): React.JSX.Element {
+  const daysArr = itinerary
+    ? Object.entries(itinerary).map(([day, activities]) => ({
+        day,
+        activities: Array.isArray(activities) ? activities : Object.values(activities || {})
+      }))
+    : [];
+
+  const computedDuration = duration ?? (daysArr.length || 1);
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView style={styles.container}>
       <LinearGradient
-        colors={['#062f2b', '#0d1a1a']}
-        style={styles.backgroundGradient}
-      />
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>{title}</Text>
-        <TouchableOpacity onPress={onEdit} style={styles.iconButton}>
-          <BlurView intensity={30} tint="light" style={styles.iconBlur}>
-            <Edit2 size={18} color={TEAL} />
-          </BlurView>
-        </TouchableOpacity>
-      </View>
+        colors={["#083533", "#0b1c1c"]}
+        style={styles.hero}
+      >
+        <Text style={styles.heroTitle}>{title}</Text>
 
-      <BlurView intensity={40} tint="light" style={styles.overviewCard}>
-        <LinearGradient
-          colors={[`${TEAL}1A`, 'transparent']}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.overviewTop}>
-          <Calendar size={18} color={TEAL} />
-          <View style={{ marginLeft: 10 }}>
-            <Text style={styles.overTitle}>Trip Start</Text>
-            <Text style={styles.overValue}>{startDate}</Text>
-          </View>
-          <View style={styles.flexSpacer} />
-          <Clock size={18} color={TEAL} />
-          <View style={{ marginLeft: 10 }}>
-            <Text style={styles.overTitle}>Duration</Text>
-            <Text style={styles.overValue}>{duration} days</Text>
+        <View style={styles.heroRow}>
+          <View style={styles.heroItem}>
+            <Clock size={18} color={TEAL} />
+            <Text style={styles.heroText}>{computedDuration} days</Text>
           </View>
         </View>
 
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.action} onPress={onRegenerate}>
-            <BlurView intensity={25} tint="light" style={styles.actionBlur}>
-              <RefreshCw size={16} color={TEAL} />
-              <Text style={styles.actionText}>Regenerate</Text>
-            </BlurView>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.action} onPress={onViewMap}>
-            <BlurView intensity={25} tint="light" style={styles.actionBlur}>
-              <Map size={16} color={TEAL} />
-              <Text style={styles.actionText}>View Map</Text>
-            </BlurView>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.action} onPress={onEdit}>
-            <BlurView intensity={25} tint="light" style={styles.actionBlur}>
-              <Edit2 size={16} color={TEAL} />
-              <Text style={styles.actionText}>Edit</Text>
-            </BlurView>
+        <View style={styles.heroButtons}>
+          <TouchableOpacity
+            style={styles.heroBtn}
+            onPress={onRegenerate}
+          >
+            <RefreshCw size={16} color={TEAL} />
+            <Text style={styles.heroBtnText}>Regenerate</Text>
           </TouchableOpacity>
         </View>
-      </BlurView>
+      </LinearGradient>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Upcoming Days</Text>
-        <TouchableOpacity>
-          <ChevronRight size={18} color="#8b8b8b" />
-        </TouchableOpacity>
+        <Text style={styles.sectionTitle}>Your Daily Plan</Text>
       </View>
 
-      {upcoming.map((d) => (
-        <BlurView
-          key={d.day}
-          intensity={30}
-          tint="light"
-          style={styles.dayCard}
-        >
-          <View style={styles.dayLeft}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>Day {d.day}</Text>
-            </View>
-            <View style={{ marginLeft: 10 }}>
-              <Text style={styles.dayTitle}>{d.location}</Text>
-              <Text style={styles.daySummary} numberOfLines={2}>
-                {d.summary}
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.dayAction}>
-            <ChevronRight size={20} color={TEAL} />
-          </TouchableOpacity>
-        </BlurView>
-      ))}
+      {daysArr.length > 0 ? (
+        daysArr.map((dayItem: any, index) => {
+          const dayCity = dayItem.activities[0]?.city || city || "Sri Lanka";
+          const dayNumber = String(dayItem.day).replace(/^Day\s*/i, "");
+          const schedule = dayItem.activities.map((activity: any) => ({
+            time: activity.time || "",
+            label: activity.place
+          }));
 
-      <View style={{ height: 30 }} />
+          const hotels = Array.from(
+            new Set(
+              dayItem.activities.flatMap((activity: any) =>
+                Array.isArray(activity.hotels) ? activity.hotels : []
+              )
+            )
+          )
+            .filter((hotel): hotel is string => typeof hotel === "string" && hotel.length > 0)
+            .slice(0, 3);
+
+          return (
+            <View key={index} style={styles.dayCard}>
+              <Text style={styles.dayTitle}>Day {dayNumber} - {dayCity}</Text>
+
+              <View style={styles.scheduleBlock}>
+                {schedule.map((entry: any, scheduleIndex: number) => (
+                  <View key={scheduleIndex} style={styles.scheduleRow}>
+                    <Text style={styles.scheduleTime}>{entry.time}</Text>
+                    <Text style={styles.scheduleText}>{entry.label}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.hotelBlock}>
+                <Text style={styles.hotelTitle}>Hotel recommendation to stay</Text>
+                {hotels.length > 0 ? (
+                  hotels.map((hotel: string) => (
+                    <Text key={hotel} style={styles.hotelItem}>{hotel}</Text>
+                  ))
+                ) : (
+                  <Text style={styles.hotelItem}>{dayCity} Central Hotel</Text>
+                )}
+              </View>
+            </View>
+          );
+        })
+      ) : (
+        <Text style={styles.emptyText}>No itinerary generated yet</Text>
+      )}
+
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
-const sampleDays: Day[] = [
-  {
-    day: 1,
-    location: 'Kandy - Temple & Gardens',
-    summary:
-      'Visit the Temple of the Tooth, stroll the Royal Botanical Gardens and enjoy a cultural show in the evening.',
-  },
-  {
-    day: 2,
-    location: 'Dambulla & Sigiriya',
-    summary:
-      'Explore Dambulla Cave Temple and climb Sigiriya Rock Fortress for breathtaking views.',
-  },
-  {
-    day: 3,
-    location: 'Colombo - City & Coast',
-    summary:
-      'Return to Colombo by scenic train, enjoy lunch at a local favorite and walk the Galle Face Green.',
-  },
-];
-
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 56,
-    paddingHorizontal: 20,
-    paddingBottom: 18,
-    backgroundColor: '#1a1a1a',
+    flex: 1,
+    backgroundColor: COLORS.bg
   },
-  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  title: {
-    fontSize: 20,
-    fontFamily: 'Poppins-SemiBold',
-    color: COLORS.offWhite,
-    fontWeight: '700',
+
+  hero: {
+    paddingTop: 60,
+    paddingHorizontal: 24,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30
   },
-  iconButton: { marginLeft: 'auto' },
-  iconBlur: {
-    width: 44,
-    height: 44,
+
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: 12
+  },
+
+  heroRow: {
+    flexDirection: "row"
+  },
+
+  heroItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 20
+  },
+
+  heroText: {
+    color: COLORS.text,
+    marginLeft: 6,
+    fontSize: 14
+  },
+
+  heroButtons: {
+    flexDirection: "row",
+    marginTop: 18
+  },
+
+  heroBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.glass,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    marginRight: 10
   },
-  backgroundGradient: { ...StyleSheet.absoluteFillObject },
-  overviewCard: {
-    padding: 18,
-    borderRadius: 20,
-    marginBottom: 18,
-    backgroundColor: 'rgba(10,12,12,0.35)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
-  },
-  overviewTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  overTitle: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
-  overValue: { fontSize: 14, fontWeight: '700', color: COLORS.offWhite },
-  flexSpacer: { flex: 1 },
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  action: { width: (width - 72) / 3 },
-  actionBlur: {
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
-  },
-  actionText: {
-    marginTop: 6,
-    fontSize: 12,
+
+  heroBtnText: {
+    marginLeft: 6,
     color: COLORS.teal,
-    fontWeight: '600',
+    fontWeight: "600",
+    fontSize: 12
   },
+
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    paddingHorizontal: 24,
+    marginTop: 20,
+    marginBottom: 10
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.offWhite },
+
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.text
+  },
+
   dayCard: {
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    marginHorizontal: 20,
+    marginBottom: 14,
+    padding: 18,
+    backgroundColor: COLORS.card,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.03)',
+    borderColor: COLORS.cardBorder
   },
-  dayLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  badge: {
-    width: 64,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: `${TEAL}30`,
-    justifyContent: 'center',
-    alignItems: 'center',
+
+  dayTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: 16
   },
-  badgeText: { color: COLORS.offWhite, fontWeight: '700' },
-  dayTitle: { fontSize: 14, fontWeight: '700', color: COLORS.offWhite },
-  daySummary: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 4,
-    maxWidth: width - 160,
+
+  scheduleBlock: {
+    gap: 12
   },
-  dayAction: { marginLeft: 12 },
+
+  scheduleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start"
+  },
+
+  scheduleTime: {
+    width: 58,
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.teal
+  },
+
+  scheduleText: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: "500"
+  },
+
+  hotelBlock: {
+    marginTop: 18,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.cardBorder
+  },
+
+  hotelTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: 8
+  },
+
+  hotelItem: {
+    fontSize: 13,
+    color: COLORS.muted,
+    marginBottom: 6
+  },
+
+  emptyText: {
+    marginTop: 20,
+    textAlign: "center",
+    color: COLORS.muted
+  }
 });
