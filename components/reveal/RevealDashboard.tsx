@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ImageBackground,
   Alert,
+  Modal,
 } from 'react-native';
 import { Asset } from 'expo-asset';
 import { BlurView } from 'expo-blur';
@@ -53,8 +54,11 @@ interface RevealDashboardProps {
   onSelectMapProgress: () => void;
   onViewSettings: () => void;
   onSelectRelicHunter?: () => void;
-  onSelectARGallery?: () => void;
   onViewInfo?: () => void;
+}
+
+interface InfoModalState {
+  visible: boolean;
 }
 
 // ============================================
@@ -97,7 +101,6 @@ export const RevealDashboard: React.FC<RevealDashboardProps> = ({
   onSelectMapProgress,
   onViewSettings,
   onSelectRelicHunter,
-  onSelectARGallery,
   onViewInfo,
 }) => {
   const { user } = useAuth();
@@ -220,6 +223,9 @@ export const RevealDashboard: React.FC<RevealDashboardProps> = ({
   const { profile } = useUserProfile(user?.uid);
 
   const [recentScans, setRecentScans] = useState<RecentScan[]>([]);
+
+  // Info modal state
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
   // Helper: normalize scans to ensure timestamp exists and is a Date
   const normalizeScans = (
@@ -465,11 +471,7 @@ export const RevealDashboard: React.FC<RevealDashboardProps> = ({
             </View>
             <TouchableOpacity
               style={styles.infoButton}
-              onPress={() =>
-                onViewInfo
-                  ? onViewInfo()
-                  : Alert.alert('Sri REVEAL', 'More info coming soon')
-              }
+              onPress={() => setShowInfoModal(true)}
             >
               <Ionicons
                 name="information-circle-outline"
@@ -645,51 +647,32 @@ export const RevealDashboard: React.FC<RevealDashboardProps> = ({
 
               {/* Relic Hunter */}
               <TouchableOpacity
-                style={styles.featureCard}
-                onPress={() => (onSelectRelicHunter ? onSelectRelicHunter() : Alert.alert('Relic Hunter', 'Feature not available'))}
-                activeOpacity={0.7}
+                style={[styles.featureCard, styles.upcomingCard]}
+                onPress={() => Alert.alert('Coming Soon', 'Relic Hunter mode will be available in the next update')}
+                activeOpacity={0.5}
+                disabled={true}
               >
                 <BlurView
                   intensity={30}
                   tint="dark"
-                  style={[styles.featureBlur, styles.featureRow]}
+                  style={[styles.featureBlur, styles.featureRow, styles.upcomingBlur]}
                 >
-                  <View style={styles.featureIcon}>
-                    <Ionicons name="compass" size={28} color="#FFD700" />
+                  <View style={[styles.featureIcon, styles.upcomingIcon]}>
+                    <Ionicons name="compass" size={28} color="rgba(255, 215, 0, 0.4)" />
                   </View>
                   <View style={styles.featureText}>
-                    <Text style={styles.featureTitle}>Relic Hunter</Text>
-                    <Text style={styles.featureSubtitle}>
-                      Explore relic hotspots
+                    <Text style={[styles.featureTitle, styles.upcomingTitle]}>Relic Hunter</Text>
+                    <Text style={[styles.featureSubtitle, styles.upcomingSubtitle]}>
+                      Coming Soon
                     </Text>
+                  </View>
+                  <View style={styles.upcomingBadge}>
+                    <Text style={styles.upcomingBadgeText}>Soon</Text>
                   </View>
                 </BlurView>
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* AR Gallery */}
-          <TouchableOpacity
-            style={[styles.featureCard]}
-            onPress={() => (onSelectARGallery ? onSelectARGallery() : Alert.alert('AR Gallery', 'Feature not available'))}
-            activeOpacity={0.7}
-          >
-            <BlurView
-              intensity={30}
-              tint="dark"
-              style={[styles.featureBlur, styles.featureRow]}
-            >
-              <View style={styles.featureIcon}>
-                <Ionicons name="images" size={28} color="#FFD700" />
-              </View>
-              <View style={styles.featureText}>
-                <Text style={[styles.featureTitle]}>AR Gallery</Text>
-                <Text style={styles.featureSubtitle}>
-                  View scanned relics in AR
-                </Text>
-              </View>
-            </BlurView>
-          </TouchableOpacity>
 
           {/* Recent Scans */}
           {recentScans.length > 0 && (
@@ -710,7 +693,7 @@ export const RevealDashboard: React.FC<RevealDashboardProps> = ({
                     <View style={styles.scanInfo}>
                       <Text style={styles.scanName}>{scan.relicName}</Text>
                       <Text style={styles.scanMeta}>
-                        {formatDate(scan.timestamp)} • {scan.xpEarned} XP
+                        {scan.xpEarned} XP
                       </Text>
                     </View>
                     <Ionicons
@@ -746,6 +729,76 @@ export const RevealDashboard: React.FC<RevealDashboardProps> = ({
           <View style={styles.bottomPadding} />
         </ScrollView>
       </SafeAreaView>
+
+      {/* Info Modal */}
+      <Modal
+        visible={showInfoModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowInfoModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <BlurView intensity={95} tint="dark" style={styles.modalBlur}>
+              {/* Close Button */}
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowInfoModal(false)}
+              >
+                <Ionicons name="close" size={28} color="#FFD700" />
+              </TouchableOpacity>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+                {/* Title */}
+                <Text style={styles.modalTitle}>
+                  Sri<Text style={{ color: '#FFD700' }}>REVEAL</Text>
+                </Text>
+                <Text style={styles.modalSubtitle}>Explore Sri Lanka's Cultural Heritage</Text>
+
+                {/* Sections */}
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoSectionTitle}>About Sri REVEAL</Text>
+                  <Text style={styles.infoText}>
+                    Sri REVEAL is an immersive AR experience that guides you through Sri Lanka's most important archaeological and cultural sites. Discover hidden relics, complete interactive scans, and unlock the stories of this ancient island.
+                  </Text>
+                </View>
+
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoSectionTitle}>🎯 How to Play</Text>
+                  <Text style={styles.infoText}>
+                    1. <Text style={styles.infoBold}>Start Scanning</Text>: Use the camera to locate and scan relics at hotspots across Sri Lanka.{'\n\n'}
+                    2. <Text style={styles.infoBold}>Explore Districts</Text>: Track your progress on the interactive map as you uncover more of the country.{'\n\n'}
+                    3. <Text style={styles.infoBold}>Earn Rewards</Text>: Collect XP, complete achievements, and advance your explorer level.
+                  </Text>
+                </View>
+
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoSectionTitle}>✨ Features</Text>
+                  <Text style={styles.infoText}>
+                    <Text style={styles.infoBold}>Relic Hunter</Text>: Navigate AR hotspots to find and scan artifacts.{'\n\n'}
+                    <Text style={styles.infoBold}>Sri Lanka Map</Text>: View your exploration progress across all 25 districts.{'\n\n'}
+                    <Text style={styles.infoBold}>Scan History</Text>: Track all your discoveries and achievements.
+                  </Text>
+                </View>
+
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoSectionTitle}>📊 Progression</Text>
+                  <Text style={styles.infoText}>
+                    Your level reflects your exploration progress. Each scan and discovery earns you XP. Unlock special titles as you advance: Novice Explorer → Relic Seeker → Artifact Hunter → History Scholar → Master Archaeologist → Legendary Curator.
+                  </Text>
+                </View>
+
+                <View style={[styles.infoSection, styles.lastSection]}>
+                  <Text style={styles.infoSectionTitle}>🌍 Cultural Impact</Text>
+                  <Text style={styles.infoText}>
+                    Sri REVEAL celebrates Sri Lanka's rich cultural heritage and promotes awareness of important archaeological sites. Your exploration contributes to digital preservation of these treasures.
+                  </Text>
+                </View>
+              </ScrollView>
+            </BlurView>
+          </View>
+        </View>
+      </Modal>
     </ImageBackground>
   );
 };
@@ -1169,6 +1222,112 @@ const styles = StyleSheet.create({
 
   bottomPadding: {
     height: 40,
+  },
+
+  // Info Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxHeight: '85%',
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.2)',
+  },
+  modalBlur: {
+    padding: 24,
+    paddingTop: 20,
+  },
+  modalCloseButton: {
+    alignSelf: 'flex-end',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalScroll: {
+    marginHorizontal: -24,
+    paddingHorizontal: 24,
+  },
+  modalTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#fff',
+    marginBottom: 4,
+    fontFamily: 'Poppins-Bold',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginBottom: 24,
+    fontFamily: 'Poppins-Regular',
+  },
+  infoSection: {
+    marginBottom: 20,
+  },
+  lastSection: {
+    marginBottom: 40,
+  },
+  infoSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFD700',
+    marginBottom: 10,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  infoText: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontFamily: 'Poppins-Regular',
+  },
+  infoBold: {
+    fontWeight: '600',
+    color: '#fff',
+    fontFamily: 'Poppins-SemiBold',
+  },
+
+  // Upcoming Feature Styles
+  upcomingCard: {
+    opacity: 1,
+    borderColor: 'rgba(255, 215, 0, 0.15)',
+  },
+  upcomingBlur: {
+    backgroundColor: 'rgba(255, 215, 0, 0.04)',
+  },
+  upcomingIcon: {
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+  },
+  upcomingTitle: {
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  upcomingSubtitle: {
+    color: 'rgba(255, 215, 0, 0.5)',
+    fontFamily: 'Poppins-Medium',
+    fontSize: 11,
+  },
+  upcomingBadge: {
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  upcomingBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255, 215, 0, 0.6)',
+    fontFamily: 'Poppins-SemiBold',
   },
 });
 

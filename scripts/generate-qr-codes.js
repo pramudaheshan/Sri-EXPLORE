@@ -16,6 +16,7 @@ const relicsData = [
   { id: 'galle-010', name: 'Tsunami Honganji Viharaya' },
   { id: 'galle-011', name: 'VOC Monogram Stone' },
   { id: 'galle-012', name: 'Raksha Devil Mask' },
+  { id: 'galle-014', name: 'Tea Cup' },
 ];
 
 // Helper to create custom QR code with text overlay
