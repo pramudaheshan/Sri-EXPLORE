@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import React, { useState } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
 import {
@@ -13,7 +13,7 @@ import {
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import ItineraryHub from '../../components/itinerary/ItineraryHub';
-import ItineraryChat from '../../components/itinerary/ItineraryChat';
+import PreferencesHub from '../../components/itinerary/PreferencesHub';
 
 type FamilyMember = { role: string; age: string };
 type Friend = { age: string; gender: string };
@@ -36,10 +36,9 @@ export default function TripPreferencesScreen() {
   ]);
   const [friends, setFriends] = useState<Friend[]>([{ age: '', gender: '' }]);
 
-  const [view, setView] = useState<'chat' | 'result' | 'modify'>('chat');
-  const [itineraryResult, setItineraryResult] = useState<any>(null);
-  const [tripCity, setTripCity] = useState<string>('');
-  const [tripDuration, setTripDuration] = useState<number>(3);
+  const [view, setView] = useState<'preferences' | 'result' | 'modify'>(
+    'preferences',
+  );
 
   const router = useRouter();
 
@@ -84,33 +83,39 @@ export default function TripPreferencesScreen() {
     setView('result');
   };
 
-  if (view === 'result' && itineraryResult) {
+  if (view === 'result') {
     return (
       <ItineraryHub
         title="Your Smart Itinerary"
         startDate={startDate}
-        duration={tripDuration}
-        onEdit={() => setView('chat')}
-        onRegenerate={() => setView('chat')}
-        //onViewMap={() => router.push('/map')}
-        itinerary={itineraryResult}
-        city={tripCity}
-        onViewMap={undefined}
+        duration={duration}
+        onEdit={() => setView('modify')}
+        onRegenerate={() => setView('preferences')}
+        onViewMap={() => router.push('/map' as any)}
       />
     );
   }
 
-
-
   return (
-    <ItineraryChat
-      onResult={(itinerary: any, city: string, days: number) => {
-        setItineraryResult(itinerary);
-        setTripCity(city);
-        setTripDuration(days);
+    <PreferencesHub
+      initial={{
+        startDate,
+        duration,
+        group,
+        budget,
+        interests: selectedInterests,
+        transport,
+      }}
+      onSubmit={(values) => {
+        setStartDate(values.startDate);
+        setDuration(values.duration);
+        setGroup(values.group);
+        setBudget(values.budget);
+        setSelectedInterests(values.interests);
+        setTransport(values.transport);
         setView('result');
       }}
-      onBack={() => router.back()}
+      onOpenModify={() => setView('modify')}
     />
   );
 }

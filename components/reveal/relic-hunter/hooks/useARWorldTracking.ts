@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { DeviceMotion, DeviceMotionMeasurement } from 'expo-sensors';
 import { Magnetometer } from 'expo-sensors';

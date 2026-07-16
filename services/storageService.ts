@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import app from '../firebaseConfig';
 

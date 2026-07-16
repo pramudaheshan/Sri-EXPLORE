@@ -10,10 +10,18 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sriexplore.app"
+      "bundleIdentifier": "com.sriexplore.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyAMc668klhMfo0kNQS2Ylldz7g28xBt418"
+      }
     },
     "android": {
-      "package": "com.sriexplore.app"
+      "package": "com.sriexplore.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAMc668klhMfo0kNQS2Ylldz7g28xBt418"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
@@ -37,7 +45,17 @@
           "locationAlwaysAndWhenInUsePermission": "Allow Sri-EXPLORE to use your location to find nearby historic sites."
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#EF4444",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "SriSafeSpot Alert"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
