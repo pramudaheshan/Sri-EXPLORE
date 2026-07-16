@@ -276,7 +276,7 @@ export default function SafetyMapScreen() {
   }, [heatmapPoints]);
 
   // ── Heatmap radius (small value = less dramatic scaling on zoom out) ─────
-  const HEATMAP_RADIUS = 160;
+  const HEATMAP_RADIUS = 35;
 
 
 
