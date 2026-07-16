@@ -14,7 +14,9 @@ interface UseMapProgressReturn {
   loading: boolean;
   error: string | null;
   refreshProgress: () => Promise<void>;
-  getDistrictProgress: (districtId: SriLankanDistrict) => DistrictProgress | undefined;
+  getDistrictProgress: (
+    districtId: SriLankanDistrict,
+  ) => DistrictProgress | undefined;
   addScan: (scanData: LocationScanData) => Promise<void>;
 }
 
@@ -45,7 +47,10 @@ const getDistanceFromCoordinates = (
  * Determine which district a location belongs to based on proximity
  * to district center coordinates
  */
-const getDistrictFromCoordinates = (latitude: number, longitude: number): SriLankanDistrict | null => {
+const getDistrictFromCoordinates = (
+  latitude: number,
+  longitude: number,
+): SriLankanDistrict | null => {
   let closestDistrict: SriLankanDistrict | null = null;
   let closestDistance = Infinity;
 
@@ -75,7 +80,9 @@ const getDistrictFromCoordinates = (latitude: number, longitude: number): SriLan
  * Tracks scan completion and coverage metrics per district
  */
 export const useMapProgress = (userId?: string): UseMapProgressReturn => {
-  const [mapProgress, setMapProgress] = useState<MapProgressSummary | null>(null);
+  const [mapProgress, setMapProgress] = useState<MapProgressSummary | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,31 +119,33 @@ export const useMapProgress = (userId?: string): UseMapProgressReturn => {
       // Step 1: Initialize empty district progress for all 25 districts
       const districtProgress = initializeDistrictProgress();
 
-      // Step 2: Define total hotspots per district (configuration)
+      // Step 2: Define total hotspots per district (configuration) - ~60 hotspots per district
       const DISTRICT_HOTSPOT_TOTALS: Record<SriLankanDistrict, number> = {
-        [SriLankanDistrict.COLOMBO]: 8,
-        [SriLankanDistrict.GAMPAHA]: 6,
-        [SriLankanDistrict.KALUTARA]: 5,
-        [SriLankanDistrict.KANDY]: 8,
-        [SriLankanDistrict.MATARA]: 5,
-        [SriLankanDistrict.NUWARA_ELIYA]: 6,
-        [SriLankanDistrict.GALLE]: 7,
-        [SriLankanDistrict.HAMBANTOTA]: 5,
-        [SriLankanDistrict.MATARA_SOUTH]: 4,
-        [SriLankanDistrict.POLONNARUWA]: 5,
-        [SriLankanDistrict.ANURADHAPURA]: 6,
-        [SriLankanDistrict.JAFFNA]: 6,
-        [SriLankanDistrict.MULLAITIVU]: 4,
-        [SriLankanDistrict.VAVUNIYA]: 4,
-        [SriLankanDistrict.BATTICALOA]: 5,
-        [SriLankanDistrict.AMPARAI]: 5,
-        [SriLankanDistrict.TRINCOMALEE]: 6,
-        [SriLankanDistrict.KURUNEGALA]: 7,
-        [SriLankanDistrict.PUTTALAM]: 5,
-        [SriLankanDistrict.BADULLA]: 6,
-        [SriLankanDistrict.MONERAGALA]: 4,
-        [SriLankanDistrict.RATNAPURA]: 5,
-        [SriLankanDistrict.KEGALLE]: 5,
+        [SriLankanDistrict.COLOMBO]: 70,
+        [SriLankanDistrict.GAMPAHA]: 60,
+        [SriLankanDistrict.KALUTARA]: 60,
+        [SriLankanDistrict.KANDY]: 70,
+        [SriLankanDistrict.MATALE]: 60,
+        [SriLankanDistrict.NUWARA_ELIYA]: 60,
+        [SriLankanDistrict.GALLE]: 70,
+        [SriLankanDistrict.MATARA]: 60,
+        [SriLankanDistrict.HAMBANTOTA]: 60,
+        [SriLankanDistrict.JAFFNA]: 60,
+        [SriLankanDistrict.KILINOCHCHI]: 55,
+        [SriLankanDistrict.MANNAR]: 55,
+        [SriLankanDistrict.MULLAITIVU]: 55,
+        [SriLankanDistrict.VAVUNIYA]: 55,
+        [SriLankanDistrict.BATTICALOA]: 60,
+        [SriLankanDistrict.AMPARA]: 60,
+        [SriLankanDistrict.TRINCOMALEE]: 60,
+        [SriLankanDistrict.KURUNEGALA]: 70,
+        [SriLankanDistrict.PUTTALAM]: 60,
+        [SriLankanDistrict.ANURADHAPURA]: 70,
+        [SriLankanDistrict.POLONNARUWA]: 60,
+        [SriLankanDistrict.BADULLA]: 60,
+        [SriLankanDistrict.MONARAGALA]: 55,
+        [SriLankanDistrict.RATNAPURA]: 60,
+        [SriLankanDistrict.KEGALLE]: 60,
       };
 
       // Step 3: Fetch user's scans from Firebase using existing firebaseService
@@ -163,8 +172,9 @@ export const useMapProgress = (userId?: string): UseMapProgressReturn => {
       // Step 5: Update district progress with aggregated data
       const updatedProgress = districtProgress.map((dp) => {
         const districtScans = districtMap.get(dp.districtId) || [];
-        const totalHotspotsInDistrict = DISTRICT_HOTSPOT_TOTALS[dp.districtId] || 6;
-        
+        const totalHotspotsInDistrict =
+          DISTRICT_HOTSPOT_TOTALS[dp.districtId] || 6;
+
         // Count total hotspots explored (sum of hotspotsExplored from all scans in district)
         const hotspotsExplored = districtScans.reduce(
           (sum, scan) => sum + (scan.hotspotsExplored || 1),
@@ -184,9 +194,10 @@ export const useMapProgress = (userId?: string): UseMapProgressReturn => {
         );
 
         // Get latest scan date in this district
-        const lastActivityDate = districtScans.length > 0
-          ? new Date(districtScans[0].completedAt?.toDate?.() || new Date())
-          : undefined;
+        const lastActivityDate =
+          districtScans.length > 0
+            ? new Date(districtScans[0].completedAt?.toDate?.() || new Date())
+            : undefined;
 
         return {
           ...dp,
@@ -217,11 +228,17 @@ export const useMapProgress = (userId?: string): UseMapProgressReturn => {
         (sum, d) => sum + d.totalHotspotsInDistrict,
         0,
       );
-      const overallCoveragePercentage = totalHotspotsCap > 0
-        ? (totalHotspotsExplored / totalHotspotsCap) * 100
-        : 0;
-      const totalMapXP = updatedProgress.reduce((sum, d) => sum + d.xpEarned, 0);
-      const districtsExplored = updatedProgress.filter((d) => d.scansCompleted > 0).length;
+      const overallCoveragePercentage =
+        totalHotspotsCap > 0
+          ? (totalHotspotsExplored / totalHotspotsCap) * 100
+          : 0;
+      const totalMapXP = updatedProgress.reduce(
+        (sum, d) => sum + d.xpEarned,
+        0,
+      );
+      const districtsExplored = updatedProgress.filter(
+        (d) => d.scansCompleted > 0,
+      ).length;
       const districtsCovered100Percent = updatedProgress.filter(
         (d) => d.coveragePercentage === 100,
       ).length;
@@ -367,7 +384,9 @@ export const useMapProgress = (userId?: string): UseMapProgressReturn => {
   // Get specific district progress
   const getDistrictProgress = useCallback(
     (districtId: SriLankanDistrict): DistrictProgress | undefined => {
-      return mapProgress?.districtProgress.find((d) => d.districtId === districtId);
+      return mapProgress?.districtProgress.find(
+        (d) => d.districtId === districtId,
+      );
     },
     [mapProgress],
   );
