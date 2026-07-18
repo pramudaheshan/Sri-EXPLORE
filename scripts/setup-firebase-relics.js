@@ -476,41 +476,6 @@ const relicsData = [
     tags: ['mask', 'raksha', 'exorcism', 'ritual'],
     createdAt: admin.firestore.Timestamp.now(),
   },
-  {
-    id: 'galle-014',
-    name: 'Tea Cup',
-    description:
-      'Delicate porcelain tea cup from the colonial era, featuring fine craftsmanship and elegant design patterns typical of 18th-century dining culture in Galle.',
-    model3dPath: 'Tea-Cup.glb',    scale: 0.5,    location: {
-      latitude: 6.0275,
-      longitude: 80.214,
-      name: 'Colombo, Horizon Campus',
-    },
-    hotspots: [
-      {
-        id: 'hotspot-1',
-        name: 'Cup Handle',
-        description: 'Intricately curved handle finished with gold trim.',
-        position: { x: 0.15, y: 0.35, z: -0.1 },
-      },
-      {
-        id: 'hotspot-2',
-        name: 'Floral Design',
-        description: 'Hand-painted floral motifs adorning the exterior.',
-        position: { x: 0, y: 0.45, z: 0.15 },
-      },
-      {
-        id: 'hotspot-3',
-        name: 'Base Maker Mark',
-        description: 'Ceramic signature mark identifying the artisan.',
-        position: { x: 0, y: 0.05, z: 0.5 },
-      },
-    ],
-    xpReward: 85,
-    difficulty: 'Easy',
-    tags: ['teacup', 'porcelain', 'colonial', 'artifact'],
-    createdAt: admin.firestore.Timestamp.now(),
-  },
 ];
 
 async function setupRelicsCollection() {
