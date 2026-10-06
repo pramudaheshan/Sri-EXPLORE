@@ -10,15 +10,9 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import { environment } from '../config/environment';
 
-const firebaseConfig = {
-  apiKey: 'AIzaSyBFHtvzpVBUk0GD-xsuAIdIPS6rjXz5OlY',
-  authDomain: 'sri-explore.firebaseapp.com',
-  projectId: 'sri-explore',
-  storageBucket: 'sri-explore.firebasestorage.app',
-  messagingSenderId: '105479351363',
-  appId: '1:105479351363:web:7522edfc32f1a37a30b8f6',
-};
+const firebaseConfig = environment.firebase;
 
 // Prevent re-initializing on hot reload
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();

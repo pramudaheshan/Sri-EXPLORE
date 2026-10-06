@@ -30,6 +30,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import MapView, { Marker, Heatmap, PROVIDER_GOOGLE, Region, MapPressEvent } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { environment } from '../../config/environment';
 import {
   ArrowLeft,
   TriangleAlert as AlertTriangle,
@@ -362,8 +363,7 @@ export default function SafetyMapScreen() {
 
   const fetchWeatherAlerts = useCallback(async (lat = 7.8731, lon = 80.7718) => {
     try {
-      const KEY = '411b16aa04a3b329e0f4ef991f513476';
-      const res  = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${KEY}`);
+      const res  = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${environment.openWeatherApiKey}`);
       if (!res.ok) return;
       const data = await res.json();
       const cond = data.weather?.[0]?.main ?? '';

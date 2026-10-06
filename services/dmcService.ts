@@ -10,14 +10,12 @@
 // ==========================================
 
 import { DMCDisasterAlert, SafetyAlert, AlertCategory, DangerSeverity } from '../types/safety';
+import { environment } from '../config/environment';
 
 // Type alias for DMC alert types
 type DMCAlertType = DMCDisasterAlert['type'];
 
 // ============ API CONFIGURATION ============
-
-// OpenWeatherMap API Key (User provided)
-const OPENWEATHER_API_KEY = '411b16aa04a3b329e0f4ef991f513476';
 
 // ReliefWeb API - FREE, no key required
 const RELIEFWEB_API_BASE = 'https://api.reliefweb.int/v1';
@@ -95,7 +93,7 @@ export const fetchWeatherData = async (lat: number, lon: number): Promise<Weathe
     console.log('🌤️ Fetching real weather data from OpenWeatherMap...');
     
     const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}&units=metric`,
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${environment.openWeatherApiKey}&units=metric`,
       { 
         method: 'GET',
         headers: { 'Accept': 'application/json' }
