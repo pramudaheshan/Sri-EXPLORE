@@ -6,17 +6,9 @@ import { initializeAuth, getAuth } from 'firebase/auth';
 import { getReactNativePersistence } from '@firebase/auth/dist/rn/index.js';
 import { getStorage } from 'firebase/storage';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import { environment } from './config/environment';
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: 'AIzaSyBFHtvzpVBUk0GD-xsuAIdIPS6rjXz5OlY',
-  authDomain: 'sri-explore.firebaseapp.com',
-  projectId: 'sri-explore',
-  storageBucket: 'sri-explore.firebasestorage.app',
-  messagingSenderId: '105479351363',
-  appId: '1:105479351363:web:7522edfc32f1a37a30b8f6',
-  measurementId: 'G-2Z9VQX84YL',
-};
+const firebaseConfig = environment.firebase;
 
 // Initialize Firebase (prevent re-initialization)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();

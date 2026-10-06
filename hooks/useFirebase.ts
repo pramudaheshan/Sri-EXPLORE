@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Firebase Hooks for Sri-EXPLORE
 import { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';

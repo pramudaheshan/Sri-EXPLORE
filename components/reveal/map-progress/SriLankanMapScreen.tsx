@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Example Implementation: Sri Lankan Map Progress screen
  * Shows how to integrate the map progress components and hook

@@ -16,7 +16,7 @@ You need to have:
 2. Select your project
 3. Go to **Project Settings** → **Service Accounts**
 4. Click **Generate New Private Key**
-5. Save the downloaded JSON file as `firebaseServiceAccountKey.json` in your project root
+5. Base64-encode the downloaded JSON and add it to your local `.env` as `FIREBASE_SERVICE_ACCOUNT_JSON_B64`
 
 ⚠️ **Important**: Add this file to `.gitignore` - never commit service account keys!
 
@@ -35,7 +35,7 @@ npm install firebase-admin qrcode
 Run this command from your project root:
 
 ```bash
-node scripts/setup-firebase-relics.js
+node --env-file=.env scripts/setup-firebase-relics.js
 ```
 
 This will:
@@ -138,10 +138,11 @@ Then run the setup script again.
 
 ## Troubleshooting
 
-### Error: "firebaseServiceAccountKey.json not found"
+### Error: "Firebase Admin credentials are missing or invalid"
 
 - Download your service account key from Firebase Console
-- Save it in the project root directory
+- Base64-encode it and set `FIREBASE_SERVICE_ACCOUNT_JSON_B64` in your local `.env`
+- Set `FIREBASE_DATABASE_URL` in your local `.env`
 
 ### Error: "Permission denied" when creating documents
 
@@ -184,7 +185,7 @@ service cloud.firestore {
 
 ```bash
 # Setup relics collection
-node scripts/setup-firebase-relics.js
+node --env-file=.env scripts/setup-firebase-relics.js
 
 # Generate QR codes
 node scripts/generate-qr-codes.js
@@ -193,5 +194,5 @@ node scripts/generate-qr-codes.js
 npx expo start
 
 # Both setup and QR codes
-node scripts/setup-firebase-relics.js && node scripts/generate-qr-codes.js
+node --env-file=.env scripts/setup-firebase-relics.js && node scripts/generate-qr-codes.js
 ```

@@ -1,30 +1,26 @@
 const admin = require('firebase-admin');
-const path = require('path');
-
-// Initialize Firebase Admin SDK
-const serviceAccountPath = path.join(
-  __dirname,
-  '../firebaseServiceAccountKey.json',
-);
-
-// Note: You need to download your service account key from Firebase Console
-// 1. Go to Firebase Console -> Project Settings -> Service Accounts
-// 2. Click "Generate New Private Key"
-// 3. Save it as firebaseServiceAccountKey.json in the project root
 
 try {
-  const serviceAccount = require(serviceAccountPath);
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON_B64) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON_B64 is not set');
+  }
+
+  const serviceAccount = JSON.parse(
+    Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_B64, 'base64').toString(
+      'utf8',
+    ),
+  );
+
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: 'https://your-project-id.firebaseio.com',
+    databaseURL: process.env.FIREBASE_DATABASE_URL,
   });
 } catch (error) {
   console.error(
-    '❌ Error: firebaseServiceAccountKey.json not found!',
+    '❌ Firebase Admin credentials are missing or invalid.',
     '\nSteps to fix:',
-    '1. Go to Firebase Console -> Project Settings -> Service Accounts',
-    '2. Click "Generate New Private Key"',
-    '3. Save it as firebaseServiceAccountKey.json in the project root',
+    '1. Export FIREBASE_SERVICE_ACCOUNT_JSON_B64 from your local .env',
+    '2. Set FIREBASE_DATABASE_URL in your local .env',
     '\nError details:',
     error.message,
   );
