@@ -5,6 +5,8 @@ Expo and React Native. It combines itinerary planning, gamified heritage
 discovery, augmented-reality relic scanning, Firebase-backed user profiles,
 and SriSafeSpot safety alerts in one mobile-first experience.
 
+![Sri-Explore Travel App Showcase](./assets/Sri-Explore.png)
+
 ## Features
 
 - **Home dashboard** for accessing the main travel, discovery, and safety
